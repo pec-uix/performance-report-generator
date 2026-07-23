@@ -120,4 +120,31 @@ describe('normalizeDate', () => {
     expect(r.issue?.message).toContain('5')
     expect(r.issue?.row).toBe(5)
   })
+
+  // ── M/D/YY 與 M/D/YYYY 格式（實際 Excel 資料格式） ─────────────────────
+
+  it('接受 M/D/YY 格式（1/1/26 → 2026-01-01）', () => {
+    const r = normalizeDate('1/1/26', 'workDate', 0)
+    expect(r.valid).toBe(true)
+    expect(r.value).toBe('2026-01-01')
+  })
+
+  it('接受 M/D/YY 格式（3/1/26 → 2026-03-01）', () => {
+    const r = normalizeDate('3/1/26', 'workDate', 0)
+    expect(r.valid).toBe(true)
+    expect(r.value).toBe('2026-03-01')
+  })
+
+  it('接受 M/D/YYYY 格式（1/1/2026 → 2026-01-01）', () => {
+    const r = normalizeDate('1/1/2026', 'workDate', 0)
+    expect(r.valid).toBe(true)
+    expect(r.value).toBe('2026-01-01')
+  })
+
+  it('M/D/YY 格式 yy>=50 視為 19xx（12/31/99 → 1999-12-31）', () => {
+    const r = normalizeDate('12/31/99', 'workDate', 0)
+    expect(r.valid).toBe(true)
+    expect(r.value).toBe('1999-12-31')
+  })
 })
+

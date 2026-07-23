@@ -78,11 +78,64 @@ describe('zipReader', () => {
       expect(result.images).toHaveLength(2)
     })
 
-    it('無效副檔名 → ZIP_INVALID_EXTENSION error', async () => {
+    it('非圖片副檔名 → ZIP_NON_IMAGE_FILE_IGNORED warning', async () => {
       const buf = await buildZip([{ name: 'malware.exe', content: new Uint8Array([0]) }])
       const result = await parseZipBuffer(buf)
-      expect(result.issues.some((i) => i.code === 'ZIP_INVALID_EXTENSION')).toBe(true)
+      expect(result.valid).toBe(true)
+      expect(result.issues.some((i) => i.code === 'ZIP_NON_IMAGE_FILE_IGNORED')).toBe(true)
       expect(result.images).toHaveLength(0)
+    })
+
+    it('ZIP 含圖片與 .xlsx 時 valid = true，圖片仍進 validImages', async () => {
+      const buf = await buildZip([
+        { name: 'photo.png', content: FAKE_PNG },
+        { name: 'source.xlsx', content: new Uint8Array([1, 2, 3]) },
+      ])
+      const result = await parseZipBuffer(buf)
+      expect(result.valid).toBe(true)
+      expect(result.images).toHaveLength(1)
+      expect(result.images[0].basename).toBe('photo.png')
+      expect(result.issues.some((i) => i.code === 'ZIP_NON_IMAGE_FILE_IGNORED')).toBe(true)
+    })
+
+    it('ZIP 含圖片與 .py 時 valid = true', async () => {
+      const buf = await buildZip([
+        { name: 'photo.png', content: FAKE_PNG },
+        { name: 'script.py', content: new Uint8Array([1]) },
+      ])
+      const result = await parseZipBuffer(buf)
+      expect(result.valid).toBe(true)
+      expect(result.images).toHaveLength(1)
+    })
+
+    it('ZIP 含圖片與 .command 時 valid = true', async () => {
+      const buf = await buildZip([
+        { name: 'photo.png', content: FAKE_PNG },
+        { name: 'run.command', content: new Uint8Array([1]) },
+      ])
+      const result = await parseZipBuffer(buf)
+      expect(result.valid).toBe(true)
+      expect(result.images).toHaveLength(1)
+    })
+
+    it('ZIP 含圖片與 .pptx 時 valid = true', async () => {
+      const buf = await buildZip([
+        { name: 'photo.png', content: FAKE_PNG },
+        { name: 'deck.pptx', content: new Uint8Array([1]) },
+      ])
+      const result = await parseZipBuffer(buf)
+      expect(result.valid).toBe(true)
+      expect(result.images).toHaveLength(1)
+    })
+
+    it('非圖片檔不進 images', async () => {
+      const buf = await buildZip([
+        { name: 'photo.png', content: FAKE_PNG },
+        { name: 'data.xlsx', content: new Uint8Array([1]) },
+        { name: 'script.js', content: new Uint8Array([1]) },
+      ])
+      const result = await parseZipBuffer(buf)
+      expect(result.images.map((image) => image.basename)).toEqual(['photo.png'])
     })
 
     it('../ 路徑：JSZip 正規化或 isSafePath 提供防護', async () => {
@@ -161,6 +214,14 @@ describe('zipReader', () => {
       const result = await parseZipBuffer(badBuffer)
       expect(result.valid).toBe(false)
       expect(result.issues.some((i) => i.code === 'ZIP_PARSE_ERROR')).toBe(true)
+    })
+
+    it('ZIP 無圖片時維持 valid=true 且 images 為空', async () => {
+      const buf = await buildZip([{ name: 'readme.txt', content: new Uint8Array([1]) }])
+      const result = await parseZipBuffer(buf)
+      expect(result.valid).toBe(true)
+      expect(result.images).toHaveLength(0)
+      expect(result.issues.some((i) => i.code === 'ZIP_NON_IMAGE_FILE_IGNORED')).toBe(true)
     })
   })
 })

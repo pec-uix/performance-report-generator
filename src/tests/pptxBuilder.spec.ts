@@ -137,6 +137,10 @@ function makeAnalysisResult(
       unmatchedMaintenanceRows: 0,
       unclassifiedRows: 0,
       unclassifiedHours: 0,
+      projectMappingAvailable: false,
+      projectMappingBlocked: false,
+      unmappedProjectHours: 0,
+      unmappedProjectRecords: 0,
     },
     issues: [],
     metadata: {

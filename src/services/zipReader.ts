@@ -29,6 +29,11 @@ interface JSZipEntryData {
 const MACOSX_PREFIX = '__MACOSX/'
 const DS_STORE = '.DS_Store'
 
+function getExtension(filename: string): string {
+  const idx = filename.lastIndexOf('.')
+  return idx >= 0 ? filename.slice(idx).toLowerCase() : ''
+}
+
 export async function parseZipBuffer(
   buffer: ArrayBuffer,
   limits: typeof FILE_LIMITS = FILE_LIMITS
@@ -76,13 +81,13 @@ export async function parseZipBuffer(
       continue
     }
 
-    // 副檔名檢查
+    // 非圖片檔只記錄並忽略，不解壓、不解析、不執行。
     if (!isAllowedImageExtension(basename)) {
       issues.push({
-        code: 'ZIP_INVALID_EXTENSION',
-        severity: 'error',
+        code: 'ZIP_NON_IMAGE_FILE_IGNORED',
+        severity: 'warning',
         source: 'image-zip',
-        message: `ZIP 中包含不允許的檔案「${basename}」（只允許 .png、.jpg、.jpeg）`,
+        message: `ZIP 中非圖片檔「${basename}」已忽略（extension: ${getExtension(basename) || 'none'}；reason: non-image file ignored）。`,
         filename: basename,
       })
       continue

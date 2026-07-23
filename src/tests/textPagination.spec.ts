@@ -22,7 +22,7 @@ describe('textPaginationService', () => {
     })
 
     it('移除 script 標籤及內容', () => {
-      const input = '<script>alert("xss")<\/script>正常文字'
+      const input = '<script>alert("xss")</script>正常文字'
       expect(sanitizeText(input)).not.toContain('alert')
       expect(sanitizeText(input)).toContain('正常文字')
     })

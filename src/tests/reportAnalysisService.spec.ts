@@ -165,6 +165,60 @@ describe('runAnalysis', () => {
     expect(result.revenue.configured).toBe(false)
   })
 
+  it('收入工時彙總存在時，整體收入摘要維持使用收入工時彙總來源', () => {
+    const state = makePassedValidationState()
+    const workbookResult = state.workbookResult
+    if (!workbookResult) throw new Error('missing workbook')
+    workbookResult.parsedSheets['收入工時彙總'] = {
+      originalName: '收入工時彙總',
+      normalizedName: '收入工時彙總',
+      headers: ['模組', '收入'],
+      rowCount: 2,
+      rows: [
+        ['A', 1044000],
+        ['B', 21452000],
+      ],
+    }
+    workbookResult.parsedSheets['專案清單'] = {
+      originalName: '專案清單',
+      normalizedName: '專案清單',
+      headers: ['項次', '專案代碼', '專案名稱', '收入'],
+      rowCount: 1,
+      rows: [['1', 'PRJ-001', '測試專案一', 999]],
+    }
+
+    const result = runAnalysis(state, 'S2')
+    expect(result.revenue.configured).toBe(true)
+    expect(result.revenue.cumulativeRevenue).toBe(22496000)
+    expect(result.revenue.sourceLabel).toBe('收入工時彙總')
+  })
+
+  it('缺少收入工時彙總時，整體收入摘要使用專案清單.收入 fallback', () => {
+    const state = makePassedValidationState()
+    const workbookResult = state.workbookResult
+    if (!workbookResult) throw new Error('missing workbook')
+    delete workbookResult.parsedSheets['收入工時彙總']
+    workbookResult.detectedSheets = workbookResult.detectedSheets.filter(
+      (sheet) => sheet !== '收入工時彙總'
+    )
+    workbookResult.parsedSheets['專案清單'] = {
+      originalName: '專案清單',
+      normalizedName: '專案清單',
+      headers: ['項次', '專案代碼', '專案名稱', '收入'],
+      rowCount: 2,
+      rows: [
+        ['1', 'PRJ-001', '測試專案一', 1000],
+        ['2', 'PRJ-002', '測試專案二', 0],
+      ],
+    }
+
+    const result = runAnalysis(state, 'S2')
+    expect(result.revenue.configured).toBe(true)
+    expect(result.revenue.cumulativeRevenue).toBe(1000)
+    expect(result.revenue.sourceLabel).toBe('專案清單收入欄位（fallback）')
+    expect(result.issues.some((issue) => issue.code === 'REVENUE_PROJECT_MASTER_FALLBACK')).toBe(true)
+  })
+
   it('dataQuality 包含 invalidDateRows 等欄位', () => {
     const result = runAnalysis(makePassedValidationState(), 'S2')
     const dq = result.dataQuality

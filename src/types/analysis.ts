@@ -15,6 +15,12 @@ export interface NormalizedWorkRecord {
   /** 優先使用員工編號；若無則使用姓名 */
   employeeKey: string
   employeeName?: string
+  /** 工時分析 Excel「模組」欄原始正規化值；空白時為 undefined */
+  moduleKey?: string
+  /** 模組顯示名稱，預設與 moduleKey 相同；空白時為 undefined */
+  moduleName?: string
+  /** 工時分析 Excel「組織」欄；用於 Presentation 圖表口徑篩選 */
+  organization?: string
   workCategory: WorkCategory
   projectKey?: string
   projectName?: string
@@ -43,6 +49,12 @@ export interface ProjectMasterRecord {
   projectName?: string
   /** 對應到 Phase 2 ProjectItem 的項次 */
   itemNo?: string
+  /** 專案清單「模組」欄完整值，用於與工時表精確比對（如 20220506(任務名稱)） */
+  projectModuleKey?: string
+  pm?: string
+  members?: string[]
+  projectRevenue?: number | null
+  annualRevenue?: number | null
 }
 
 /** 標準化維運主檔記錄 */
@@ -50,6 +62,8 @@ export interface MaintenanceMasterRecord {
   /** 用於與工時記錄關聯的鍵值 */
   maintenanceKey: string
   maintenanceName?: string
+  /** 由 trim(編號(模組維護))+"("+trim(維運項目)+")" 組合的比對鍵 */
+  maintenanceModuleKey?: string
 }
 
 /** 標準化收入記錄 */
@@ -61,6 +75,14 @@ export interface RevenueRecord {
   /** 例如：年度收入、季度收入 */
   revenueType?: string
   periodType?: string
+}
+
+/** 専案對應表一筆對應記錄 */
+export interface ProjectMappingRecord {
+  /** 対応専案內容的項次（如 "1"、"1-1"） */
+  itemNo: string
+  /** 工時分析「模組」欄完整值 */
+  moduleKey: string
 }
 
 /** Mapper 統一輸出格式 */
@@ -150,6 +172,8 @@ export interface RevenueSummary {
   configured: boolean
   cumulativeRevenue: number | null
   quarterRevenue: number | null
+  /** 實際收入摘要來源；僅供 UI/PPT 標示，不改變計算公式 */
+  sourceLabel?: string
   /** 只有成本口徑明確時才計算 */
   revenuePerHour: number | null
   inputOutputRatio: number | null

@@ -71,7 +71,20 @@ function parseStringDate(raw: string): { y: number; m: number; d: number } | nul
     return { y: parseInt(dotMatch[1], 10), m: parseInt(dotMatch[2], 10), d: parseInt(dotMatch[3], 10) }
   }
 
-  // 4. 純數字字串（可能是 Excel 序列數以文字型態儲存）
+  // 4. M/D/YYYY 格式（如 1/1/2026 → 2026-01-01）
+  const mdyyyyMatch = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s)
+  if (mdyyyyMatch) {
+    return { y: parseInt(mdyyyyMatch[3], 10), m: parseInt(mdyyyyMatch[1], 10), d: parseInt(mdyyyyMatch[2], 10) }
+  }
+
+  // 5. M/D/YY 格式（如 1/1/26 → 2026-01-01；yy<50 視為 2000+yy）
+  const mdyyMatch = /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/.exec(s)
+  if (mdyyMatch) {
+    const yy = parseInt(mdyyMatch[3], 10)
+    return { y: yy < 50 ? 2000 + yy : 1900 + yy, m: parseInt(mdyyMatch[1], 10), d: parseInt(mdyyMatch[2], 10) }
+  }
+
+  // 6. 純數字字串（可能是 Excel 序列數以文字型態儲存）
   if (/^\d+$/.test(s)) {
     const serial = parseInt(s, 10)
     // 合理的 Excel 序列數範圍（2000-01-01 = 36526 ～ 2100-12-31 = 73050）

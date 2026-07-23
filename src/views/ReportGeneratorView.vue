@@ -245,6 +245,7 @@
           />
         </v-col>
       </v-row>
+      <CorePresentationAnalysisSummary :analysis="analysisResult.presentationAnalysis" />
       <v-row>
         <v-col cols="12" md="6">
           <ProjectRankingSummary
@@ -291,6 +292,7 @@
   import WorkHoursSummaryCard from '@/components/analysis/WorkHoursSummaryCard.vue'
   import WorkforceSummaryCard from '@/components/analysis/WorkforceSummaryCard.vue'
   import WorkTypeDistributionSummary from '@/components/analysis/WorkTypeDistributionSummary.vue'
+  import CorePresentationAnalysisSummary from '@/components/analysis/CorePresentationAnalysisSummary.vue'
   import ProjectRankingSummary from '@/components/analysis/ProjectRankingSummary.vue'
   import RevenueSummaryCard from '@/components/analysis/RevenueSummaryCard.vue'
   import DataQualitySummary from '@/components/analysis/DataQualitySummary.vue'

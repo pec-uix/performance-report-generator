@@ -13,6 +13,8 @@ import { validateWorkHoursWorkbook } from './workbookValidator'
 import { readProjectContent } from './projectContentReader'
 import { parseZipBuffer } from './zipReader'
 import { matchImages } from './imageMatcher'
+import { WORK_HOURS_FIELD_MAPPING } from '@/config/workbookFieldMappings'
+import { resolveColumnIndex, getCellString } from './fieldResolver'
 
 export type ProcessingStep =
   | 'idle'
@@ -51,6 +53,22 @@ export function createEmptyValidationState(): ValidationState {
   }
 }
 
+function buildWorkModuleKeySet(
+  workbookResult: WorkbookValidationResult | null
+): ReadonlySet<string> | undefined {
+  const workSheet = workbookResult?.parsedSheets['工時分析(自助)']
+  if (!workSheet) return undefined
+  const moduleCol = resolveColumnIndex(workSheet.headers, WORK_HOURS_FIELD_MAPPING.moduleKey)
+  if (moduleCol < 0) return undefined
+
+  const modules = new Set<string>()
+  for (const row of workSheet.rows) {
+    const moduleKey = getCellString(row, moduleCol)
+    if (moduleKey) modules.add(moduleKey)
+  }
+  return modules
+}
+
 export async function runValidation(
   workExcelFile: File,
   contentExcelFile: File,
@@ -86,7 +104,11 @@ export async function runValidation(
     const contentBuffer = await contentExcelFile.arrayBuffer()
     onStep('validating-items')
     const contentWorkbook = parseWorkbookFromBuffer(contentBuffer)
-    projectContentResult = readProjectContent(contentWorkbook)
+    projectContentResult = readProjectContent(contentWorkbook, {
+      projectMasterSheet: workbookResult?.parsedSheets['專案清單'],
+      maintenanceSheet: workbookResult?.parsedSheets['維運清單'],
+      workModuleKeys: buildWorkModuleKeySet(workbookResult),
+    })
     allIssues.push(...projectContentResult.issues)
   } catch {
     allIssues.push({

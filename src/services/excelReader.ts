@@ -18,6 +18,7 @@ export function parseWorkbookFromBuffer(buffer: ArrayBuffer): XLSX.WorkBook {
       type: 'array',
       cellDates: false,
       cellText: true,
+      cellNF: true,
     })
   } catch {
     throw new Error('無法解析 Excel 檔案，請確認檔案格式正確。')

@@ -42,7 +42,11 @@ const { MockPptxN, mockSlideN: pptMockSlideN, mockInstanceN: pptMockInstanceN } 
 
 vi.mock('pptxgenjs', () => ({ default: MockPptxN }))
 
-import { renderWorkTypePieChart } from '@/services/chartRenderer'
+import {
+  renderModuleWorkHoursChart,
+  renderMonthlyWorkTypeChart,
+  renderWorkTypePieChart,
+} from '@/services/chartRenderer'
 import { preparePptSlideData, assemblePptBlob } from '@/services/pptxBuilder'
 import type { ReportAnalysisResult } from '@/types/reportAnalysis'
 
@@ -112,6 +116,15 @@ function makeMinimalResult(): ReportAnalysisResult {
       inputOutputRatio: null,
       issues: [],
     },
+    presentationAnalysis: {
+      moduleWorkHoursCharts: [],
+      moduleWorkforce: [],
+      monthlyWorkTypes: [],
+      workforceConfigured: false,
+      monthlyRatioBasis: 'unconfirmed',
+      monthlyPeriod: { start: '2025-12-01', end: '2026-07-31' },
+      issues: [],
+    },
     dataQuality: {
       invalidDateRows: 0,
       invalidHourRows: 0,
@@ -120,6 +133,10 @@ function makeMinimalResult(): ReportAnalysisResult {
       unmatchedMaintenanceRows: 0,
       unclassifiedRows: 0,
       unclassifiedHours: 0,
+      projectMappingAvailable: false,
+      projectMappingBlocked: false,
+      unmappedProjectHours: 0,
+      unmappedProjectRecords: 0,
     },
     issues: [],
     metadata: {
@@ -161,6 +178,34 @@ describe('Phase 4 網路隔離：無網路呼叫', () => {
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
+  it('Phase 6A-2 renderer 不呼叫 fetch 或 XHR', () => {
+    renderModuleWorkHoursChart({
+      periodType: 'quarter',
+      startDate: '2026-04-01',
+      endDate: '2026-07-31',
+      totalHours: 8,
+      items: [{ moduleKey: 'UNI', displayName: 'UNI', hours: 8, ratio: 1, category: 'project' }],
+    })
+    renderMonthlyWorkTypeChart([
+      {
+        month: '2026/04',
+        projectHours: 8,
+        maintenanceHours: 0,
+        otherHours: 0,
+        totalHours: 8,
+        projectRatio: null,
+        maintenanceRatio: null,
+        otherRatio: null,
+        ratioBasis: 'unconfirmed',
+        projectWorkforce: null,
+        maintenanceWorkforce: null,
+        workforceStatus: 'not-configured',
+      },
+    ])
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(xhrOpenSpy).not.toHaveBeenCalled()
+  })
+
   it('assemblePptBlob 不呼叫 fetch', async () => {
     const result = makeMinimalResult()
     const data = preparePptSlideData(result, null, null)
@@ -191,6 +236,13 @@ describe('Phase 4 網路隔離：無網路呼叫', () => {
     const ssSpy = vi.spyOn(Storage.prototype, 'setItem')
 
     renderWorkTypePieChart(makeBasicWorkHours())
+    renderModuleWorkHoursChart({
+      periodType: 'quarter',
+      startDate: '2026-04-01',
+      endDate: '2026-07-31',
+      totalHours: 8,
+      items: [{ moduleKey: 'UNI', displayName: 'UNI', hours: 8, ratio: 1, category: 'project' }],
+    })
     const result = makeMinimalResult()
     const data = preparePptSlideData(result, null, null)
     await assemblePptBlob(data)

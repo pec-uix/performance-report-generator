@@ -50,7 +50,16 @@ function makeAnalysis(projectCount: number): ReportAnalysisResult {
     cumulativeProjectRanking: [...groups].reverse(),
     quarterProjectRanking: [...groups].reverse(),
     revenue: { configured: false, cumulativeRevenue: null, quarterRevenue: null, revenuePerHour: null, inputOutputRatio: null, issues: [] },
-    dataQuality: { invalidDateRows: 0, invalidHourRows: 0, unmatchedPeopleRows: 0, unmatchedProjectRows: 0, unmatchedMaintenanceRows: 0, unclassifiedRows: 0, unclassifiedHours: 0 },
+    presentationAnalysis: {
+      moduleWorkHoursCharts: [],
+      moduleWorkforce: [],
+      monthlyWorkTypes: [],
+      workforceConfigured: false,
+      monthlyRatioBasis: 'unconfirmed',
+      monthlyPeriod: { start: '2025-12-01', end: '2026-07-31' },
+      issues: [],
+    },
+    dataQuality: { invalidDateRows: 0, invalidHourRows: 0, unmatchedPeopleRows: 0, unmatchedProjectRows: 0, unmatchedMaintenanceRows: 0, unclassifiedRows: 0, unclassifiedHours: 0, projectMappingAvailable: false, projectMappingBlocked: false, unmappedProjectHours: 0, unmappedProjectRecords: 0 },
     issues: [],
     metadata: { calculatedAt: '2026-07-23T10:00:00.000Z', sourceRowCounts: {} },
   }
@@ -126,7 +135,7 @@ describe('slidePaginationService', () => {
     it('4 張圖片（= PRES_IMAGE_PER_PAGE）只需 1 頁圖片', () => {
       const content = makeProjectContent([{
         normalizedItemNo: '1.0',
-        imageRefs: [{ column: '圖片展示_成果', filenames: ['a.png', 'b.png', 'c.png', 'd.png'] }],
+        imageRefs: [{ column: '已完成工作事項_圖片展示', filenames: ['a.png', 'b.png', 'c.png', 'd.png'] }],
       }])
       const result = buildProjectSlideContents(makeAnalysis(1), content)
       const imageSlides = result.slides.filter((s) => s.type === 'images')
@@ -137,7 +146,7 @@ describe('slidePaginationService', () => {
       const content = makeProjectContent([{
         normalizedItemNo: '1.0',
         imageRefs: [{
-          column: '圖片展示_成果',
+          column: '已完成工作事項_圖片展示',
           filenames: ['a.png', 'b.png', 'c.png', 'd.png', 'e.png'],
         }],
       }])
@@ -150,8 +159,8 @@ describe('slidePaginationService', () => {
       const content = makeProjectContent([{
         normalizedItemNo: '1.0',
         imageRefs: [
-          { column: '圖片展示_完成', filenames: ['a.png', 'b.png'] },
-          { column: '圖片展示_計畫', filenames: ['c.png', 'd.png', 'e.png'] },
+          { column: '已完成工作事項_圖片展示', filenames: ['a.png', 'b.png'] },
+          { column: '預計完成工作_圖片展示', filenames: ['c.png', 'd.png', 'e.png'] },
         ],
       }])
       const result = buildProjectSlideContents(makeAnalysis(1), content)
@@ -159,49 +168,190 @@ describe('slidePaginationService', () => {
       // 分類1: 2 張 → 1頁；分類2: 3 張 → 1頁（3 < 4）
       expect(imageSlides).toHaveLength(2)
       const categories = imageSlides.map((s) => (s.type === 'images' ? s.category : null))
-      expect(categories).toContain('圖片展示_完成')
-      expect(categories).toContain('圖片展示_計畫')
+      expect(categories).toContain('已完成工作事項')
+      expect(categories).toContain('預計完成工作')
     })
 
     it('頁面標籤包含 projectPageIndex / projectTotalPages', () => {
       const content = makeProjectContent([{
         normalizedItemNo: '1.0',
-        imageRefs: [{ column: '圖片展示_成果', filenames: ['a.png', 'b.png'] }],
+        imageRefs: [{ column: '已完成工作事項_圖片展示', filenames: ['a.png', 'b.png'] }],
       }])
       const result = buildProjectSlideContents(makeAnalysis(1), content)
-      const textSlide = result.slides.find((s) => s.type === 'text')
-      expect(textSlide?.projectPageIndex).toBe(1)
-      expect(textSlide?.projectTotalPages).toBeGreaterThan(1) // text + image
+      const summarySlide = result.slides.find((s) => s.type === 'summary')
+      expect(summarySlide?.projectPageIndex).toBe(1)
+      expect(summarySlide?.projectTotalPages).toBeGreaterThan(1) // summary + image
     })
 
     it('totalImagesReferenced 計算正確', () => {
       const content = makeProjectContent([{
         normalizedItemNo: '1.0',
-        imageRefs: [{ column: '圖片展示', filenames: ['a.png', 'b.png', 'c.png'] }],
+        imageRefs: [{ column: '已完成工作事項_圖片展示', filenames: ['a.png', 'b.png', 'c.png'] }],
       }])
       const result = buildProjectSlideContents(makeAnalysis(1), content)
       expect(result.totalImagesReferenced).toBe(3)
     })
 
-    it('isEmpty = true 當無文字也無圖片', () => {
+    it('無文字也無圖片時只建立摘要頁', () => {
       const content = makeProjectContent([{ normalizedItemNo: '1.0', data: {}, imageRefs: [] }])
       const result = buildProjectSlideContents(makeAnalysis(1), content)
-      const textSlide = result.slides.find((s) => s.type === 'text')
-      expect(textSlide?.type === 'text' && textSlide.isEmpty).toBe(true)
+      expect(result.slides).toHaveLength(1)
+      expect(result.slides[0]?.type).toBe('summary')
     })
 
-    it('圖片欄位不出現在 textBlocks', () => {
+    it('只有 exact alias 文字欄位會出現在 textBlocks', () => {
       const content = makeProjectContent([{
         normalizedItemNo: '1.0',
-        data: { '圖片展示_成果': '圖片1.png', '工作內容': '已完成系統建置' },
+        data: { '已完成工作事項_圖片展示': '圖片1.png', '已完成工作事項_描述': '已完成系統建置', '工作內容': '不輸出' },
         imageRefs: [],
       }])
       const result = buildProjectSlideContents(makeAnalysis(1), content)
       const textSlide = result.slides.find((s) => s.type === 'text')
       if (textSlide?.type !== 'text') return
       const labels = textSlide.textBlocks.map((b) => b.label)
-      expect(labels).not.toContain('圖片展示_成果')
-      expect(labels).toContain('工作內容')
+      expect(labels).toContain('已完成工作事項')
+      expect(labels).not.toContain('工作內容')
+      expect(result.warnings.some((w) => w.code === 'PROJECT_CONTENT_UNKNOWN_FIELD')).toBe(true)
+    })
+
+    it('四大區塊文字依 exact alias 建立，並在合併頁保留區塊標題', () => {
+      const content = makeProjectContent([{
+        normalizedItemNo: '1.0',
+        data: {
+          '已完成工作事項_描述': '完成 A',
+          '預計完成工作_描述': '預計 B',
+          'UIX執行成果_文字/連結描述': 'UIX C',
+          '執行成果_文字/連結描述': '成果 D',
+        },
+      }])
+      const result = buildProjectSlideContents(makeAnalysis(1), content)
+      const textSlides = result.slides
+        .filter((s) => s.type === 'text')
+      expect(textSlides).toHaveLength(1)
+      const labels = textSlides.flatMap((s) => (s.type === 'text' ? s.textBlocks.map((b) => b.label) : []))
+      expect(labels).toEqual(['已完成工作事項', '預計完成工作', 'UIX執行成果', '執行成果'])
+    })
+
+    it('空白欄位不建立成果文字頁，其他區塊不受影響', () => {
+      const content = makeProjectContent([{
+        normalizedItemNo: '1.0',
+        data: {
+          '已完成工作事項_描述': '   \n  ',
+          '預計完成工作_描述': '有效內容',
+        },
+      }])
+      const result = buildProjectSlideContents(makeAnalysis(1), content)
+      const textSlides = result.slides.filter((s) => s.type === 'text')
+      expect(textSlides).toHaveLength(1)
+      expect(textSlides[0]?.type === 'text' && textSlides[0].textBlocks[0]?.label).toBe('預計完成工作')
+    })
+
+    it('子項內容併入主專案且依自然項次排序', () => {
+      const content = makeProjectContent([
+        { normalizedItemNo: '1.0', rawItemNo: '1', itemType: 'main', data: { '已完成工作事項_描述': '主項' } },
+        { normalizedItemNo: '1-2', rawItemNo: '1-2', itemType: 'child', parentItemNo: '1.0', data: { '已完成工作事項_描述': '子項二' } },
+        { normalizedItemNo: '1-1', rawItemNo: '1-1', itemType: 'child', parentItemNo: '1.0', data: { '已完成工作事項_描述': '子項一' } },
+        { normalizedItemNo: '2-1', rawItemNo: '2-1', itemType: 'child', parentItemNo: '2.0', data: { '已完成工作事項_描述': '不應併入' } },
+      ])
+      const result = buildProjectSlideContents(makeAnalysis(1), content)
+      const textBlocks = result.slides
+        .filter((s) => s.type === 'text')
+        .flatMap((s) => (s.type === 'text' ? s.textBlocks : []))
+      expect(textBlocks.map((b) => b.text)).toEqual(['主項', '子項一', '子項二'])
+      expect(result.warnings.some((w) => w.code === 'PROJECT_CHILD_CONTENT_MERGED')).toBe(true)
+    })
+
+    it('子項 UIX 與執行成果圖片併入主專案且不同主專案不交叉', () => {
+      const analysis = makeAnalysis(2)
+      const content = makeProjectContent([
+        { normalizedItemNo: '1.0', rawItemNo: '1', itemType: 'main' },
+        {
+          normalizedItemNo: '1-1',
+          rawItemNo: '1-1',
+          itemType: 'child',
+          parentItemNo: '1.0',
+          imageRefs: [{ column: 'UIX執行成果_圖片展示', filenames: ['uix-1.png'] }],
+        },
+        {
+          normalizedItemNo: '1-2',
+          rawItemNo: '1-2',
+          itemType: 'child',
+          parentItemNo: '1.0',
+          imageRefs: [{ column: '執行成果_圖片展示', filenames: ['exec-1.png'] }],
+        },
+        {
+          normalizedItemNo: '2-1',
+          rawItemNo: '2-1',
+          itemType: 'child',
+          parentItemNo: '2.0',
+          imageRefs: [{ column: '執行成果_圖片展示', filenames: ['exec-2.png'] }],
+        },
+      ])
+      const result = buildProjectSlideContents(analysis, content)
+      const group1Images = result.slides
+        .filter((s) => s.type === 'images' && s.mainItemNo === '1.0')
+        .flatMap((s) => (s.type === 'images' ? s.filenames : []))
+      const group2Images = result.slides
+        .filter((s) => s.type === 'images' && s.mainItemNo === '2.0')
+        .flatMap((s) => (s.type === 'images' ? s.filenames : []))
+
+      expect(group1Images).toEqual(['uix-1.png', 'exec-1.png'])
+      expect(group2Images).toEqual(['exec-2.png'])
+    })
+
+    it('長文字不截斷並建立續頁', () => {
+      const longText = Array.from({ length: 40 }, (_, i) => `第 ${i + 1} 行內容`).join('\n')
+      const content = makeProjectContent([{
+        normalizedItemNo: '1.0',
+        data: { '已完成工作事項_描述': longText },
+      }])
+      const result = buildProjectSlideContents(makeAnalysis(1), content)
+      const textSlides = result.slides.filter((s) => s.type === 'text')
+      expect(textSlides.length).toBeGreaterThan(1)
+      const combined = textSlides
+        .flatMap((s) => (s.type === 'text' ? s.textBlocks : []))
+        .map((b) => b.text)
+        .join('\n')
+      expect(combined).toContain('第 1 行內容')
+      expect(combined).toContain('第 40 行內容')
+      expect(textSlides.some((s) => s.type === 'text' && s.isContinuation)).toBe(true)
+    })
+
+    it('重複 exact alias 欄位依順序合併並產生 warning', () => {
+      const content = makeProjectContent([{
+        normalizedItemNo: '1.0',
+        data: {
+          '已完成工作事項_描述': '第一欄',
+          '已完成工作事項_描述_2': '第二欄',
+        },
+      }])
+      const result = buildProjectSlideContents(makeAnalysis(1), content)
+      const textBlocks = result.slides
+        .filter((s) => s.type === 'text')
+        .flatMap((s) => (s.type === 'text' ? s.textBlocks : []))
+      expect(textBlocks.map((b) => b.text)).toEqual(['第一欄', '第二欄'])
+      expect(result.warnings.some((w) => w.code === 'PROJECT_CONTENT_DUPLICATE_FIELD')).toBe(true)
+    })
+
+    it('legacyGenericSection 保留原始段落標題與內容，不歸入四大成果區', () => {
+      const content = makeProjectContent([{
+        normalizedItemNo: '1.0',
+        sourceType: 'project',
+        stableItemId: '20220506',
+        moduleKey: '20220506(團購網&UNI團購網系統優化)',
+        legacySectionTitle: '專案工時分析',
+        data: {
+          專案名稱: '團購網&UNI團購網系統優化',
+          legacyGenericSection_段落標題: '專案工時分析',
+          legacyGenericSection_內容: '第一行\n第二行',
+        },
+      }])
+
+      const result = buildProjectSlideContents(makeAnalysis(1), content)
+      const textSlide = result.slides.find((s) => s.type === 'text')
+      expect(textSlide?.type === 'text' && textSlide.sectionType).toBe('legacyGeneric')
+      expect(textSlide?.type === 'text' && textSlide.sectionTitle).toBe('專案工時分析')
+      expect(textSlide?.type === 'text' && textSlide.textBlocks[0]?.text).toBe('第一行\n第二行')
     })
 
     it('專案過多時自動分頁（10 個主專案）', () => {

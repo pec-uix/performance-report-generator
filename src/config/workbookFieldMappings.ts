@@ -39,58 +39,65 @@ export const WORK_HOURS_FIELD_MAPPING: WorkbookFieldMapping = {
   workDate: {
     canonicalField: 'workDate',
     required: true,
-    aliases: ['日期', '工作日期', '作業日期', '填報日期', 'Date', '工作日'],
-    description: '工作日期欄（YYYY-MM-DD 或 YYYY/M/D）',
-    configuredStatus: 'pending-confirmation',
+    aliases: ['日期', '工作日期', '工時日期', '作業日期', '填報日期', 'Date', '工作日'],
+    description: '工作日期欄（YYYY-MM-DD、YYYY/M/D 或 M/D/YY）',
+    configuredStatus: 'configured',
   },
   employeeId: {
     canonicalField: 'employeeId',
     required: false,
     aliases: ['員工編號', '人員編號', '工號', '員工號', 'Employee ID'],
     description: '員工編號欄；若無此欄則改用姓名作為識別鍵',
-    configuredStatus: 'pending-confirmation',
+    configuredStatus: 'configured',
   },
   employeeName: {
     canonicalField: 'employeeName',
     required: false,
     aliases: ['員工姓名', '姓名', '人員姓名', 'Name', '姓名(Name)'],
     description: '員工姓名欄',
-    configuredStatus: 'pending-confirmation',
+    configuredStatus: 'configured',
   },
   hours: {
     canonicalField: 'hours',
     required: true,
     aliases: ['工時', '作業時數', '工作時數', '時數', '投入工時', '投入工時(H)'],
     description: '當日投入工時（小時）',
-    configuredStatus: 'pending-confirmation',
+    configuredStatus: 'configured',
   },
-  projectCode: {
-    canonicalField: 'projectCode',
+  moduleKey: {
+    canonicalField: 'moduleKey',
     required: false,
-    aliases: ['專案代碼', '案號', '項目代碼', '專案碼', '專案號'],
-    description: '對應專案清單的鍵值欄',
-    configuredStatus: 'pending-confirmation',
+    aliases: ['模組'],
+    description: '工時表模組欄，用於與專案清單或維運清單精確比對分類',
+    configuredStatus: 'configured',
   },
-  projectName: {
-    canonicalField: 'projectName',
+  categoryName: {
+    canonicalField: 'categoryName',
     required: false,
-    aliases: ['專案名稱', '項目名稱', '案名', '專案'],
-    description: '專案名稱（作為備用識別鍵）',
-    configuredStatus: 'pending-confirmation',
+    aliases: ['類別'],
+    description: '工作性質分類（如程式設計、系統分析等）',
+    configuredStatus: 'configured',
   },
-  maintenanceCode: {
-    canonicalField: 'maintenanceCode',
+  subModule: {
+    canonicalField: 'subModule',
     required: false,
-    aliases: ['維運代碼', '維運碼', '維運項目代碼'],
-    description: '對應維運清單的鍵值欄',
-    configuredStatus: 'pending-confirmation',
+    aliases: ['子模組'],
+    description: '子模組欄位',
+    configuredStatus: 'configured',
   },
-  maintenanceName: {
-    canonicalField: 'maintenanceName',
+  team: {
+    canonicalField: 'team',
     required: false,
-    aliases: ['維運名稱', '維運項目', '維運'],
-    description: '維運項目名稱（作為備用識別鍵）',
-    configuredStatus: 'pending-confirmation',
+    aliases: ['Team'],
+    description: 'Team 欄位',
+    configuredStatus: 'configured',
+  },
+  organization: {
+    canonicalField: 'organization',
+    required: false,
+    aliases: ['組織'],
+    description: '組織欄位，用於 Presentation 圖表固定前端開發課口徑',
+    configuredStatus: 'configured',
   },
 }
 
@@ -100,23 +107,77 @@ export const PROJECT_MASTER_FIELD_MAPPING: WorkbookFieldMapping = {
   itemNo: {
     canonicalField: 'itemNo',
     required: false,
-    aliases: ['項次', '序號', '編號', 'No'],
+    aliases: ['項次', '序號', '編號', 'No', 'id'],
     description: '對應 Phase 2 ProjectItem 的項次欄',
-    configuredStatus: 'pending-confirmation',
+    configuredStatus: 'configured',
   },
   projectCode: {
     canonicalField: 'projectCode',
     required: false,
-    aliases: ['專案代碼', '代碼', '案號', '專案號'],
-    description: '用於與工時記錄關聯的鍵值欄',
-    configuredStatus: 'pending-confirmation',
+    aliases: ['專案代碼', '代碼', '案號', '專案號', '模組編號'],
+    description: '用於與工時記錄關聯的鍵值欄（模組編號）',
+    configuredStatus: 'configured',
   },
   projectName: {
     canonicalField: 'projectName',
     required: false,
-    aliases: ['專案名稱', '名稱', '案名'],
-    description: '專案名稱',
-    configuredStatus: 'pending-confirmation',
+    aliases: ['專案名稱', '名稱', '案名', '任務名稱'],
+    description: '專案名稱（任務名稱）',
+    configuredStatus: 'configured',
+  },
+  projectModuleKey: {
+    canonicalField: 'projectModuleKey',
+    required: false,
+    aliases: ['模組'],
+    description: '專案清單「模組」欄完整值（用於與工時表精確比對）',
+    configuredStatus: 'configured',
+  },
+  projectRevenue: {
+    canonicalField: 'projectRevenue',
+    required: false,
+    aliases: ['收入'],
+    description: '專案收入金額',
+    configuredStatus: 'configured',
+  },
+  annualRevenue: {
+    canonicalField: 'annualRevenue',
+    required: false,
+    aliases: ['年度收入'],
+    description: '年度收入金額',
+    configuredStatus: 'configured',
+  },
+  pm: {
+    canonicalField: 'pm',
+    required: false,
+    aliases: ['PM'],
+    description: '專案 PM',
+    configuredStatus: 'configured',
+  },
+  members: {
+    canonicalField: 'members',
+    required: false,
+    aliases: ['專案成員', '成員', '參與人員', '參與成員', '相關成員'],
+    description: '專案成員清單',
+    configuredStatus: 'configured',
+  },
+}
+
+// ─── 専案對應表 ──────────────────────────────────────────────────────────────
+
+export const PROJECT_MAPPING_FIELD_MAPPING: WorkbookFieldMapping = {
+  itemNo: {
+    canonicalField: 'itemNo',
+    required: true,
+    aliases: ['項次', '序號'],
+    description: '對應専案內容工作表的項次（如 1、1-1）',
+    configuredStatus: 'configured',
+  },
+  moduleKey: {
+    canonicalField: 'moduleKey',
+    required: true,
+    aliases: ['模組'],
+    description: '對應工時分析「模組」欄的完整值（如 20220506(任務名稱)）',
+    configuredStatus: 'configured',
   },
 }
 
@@ -126,16 +187,16 @@ export const MAINTENANCE_FIELD_MAPPING: WorkbookFieldMapping = {
   maintenanceCode: {
     canonicalField: 'maintenanceCode',
     required: false,
-    aliases: ['維運代碼', '代碼', '維運碼', '維運號'],
-    description: '用於與工時記錄關聯的鍵值欄',
-    configuredStatus: 'pending-confirmation',
+    aliases: ['維運代碼', '代碼', '維運碼', '維運號', '編號(模組維護)'],
+    description: '用於與工時記錄關聯的鍵值欄（編號(模組維護)）',
+    configuredStatus: 'configured',
   },
   maintenanceName: {
     canonicalField: 'maintenanceName',
     required: false,
     aliases: ['維運名稱', '名稱', '維運項目'],
     description: '維運項目名稱',
-    configuredStatus: 'pending-confirmation',
+    configuredStatus: 'configured',
   },
 }
 
@@ -159,7 +220,7 @@ export const PERSON_FIELD_MAPPING: WorkbookFieldMapping = {
   department: {
     canonicalField: 'department',
     required: false,
-    aliases: ['部門', '單位', '部門名稱'],
+    aliases: ['部門', '單位', '部門名稱', '組織'],
     description: '所屬部門',
     configuredStatus: 'pending-confirmation',
   },

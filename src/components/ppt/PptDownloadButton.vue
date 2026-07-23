@@ -1,5 +1,71 @@
 <template>
   <div>
+    <v-card class="mb-4" variant="outlined">
+      <v-card-title class="text-subtitle-2">專案成本與績效設定</v-card-title>
+      <v-card-text>
+        <div class="text-caption text-grey mb-3">
+          三個單位平均時薪皆填寫後，系統才會計算各專案成本、總費用及當期績效。
+        </div>
+        <v-row dense>
+          <v-col cols="12" md="4">
+            <v-text-field
+              v-model="hourlyRateInputs.informationService"
+              label="資訊服務組平均時薪"
+              suffix="元／小時"
+              type="number"
+              min="0"
+              step="0.01"
+              density="compact"
+              variant="outlined"
+              :error-messages="rateError(hourlyRateInputs.informationService)"
+            />
+          </v-col>
+          <v-col cols="12" md="4">
+            <v-text-field
+              v-model="hourlyRateInputs.frontendDevelopment"
+              label="前端開發課平均時薪"
+              suffix="元／小時"
+              type="number"
+              min="0"
+              step="0.01"
+              density="compact"
+              variant="outlined"
+              :error-messages="rateError(hourlyRateInputs.frontendDevelopment)"
+            />
+          </v-col>
+          <v-col cols="12" md="4">
+            <v-text-field
+              v-model="hourlyRateInputs.backendDevelopment"
+              label="後端開發課平均時薪"
+              suffix="元／小時"
+              type="number"
+              min="0"
+              step="0.01"
+              density="compact"
+              variant="outlined"
+              :error-messages="rateError(hourlyRateInputs.backendDevelopment)"
+            />
+          </v-col>
+        </v-row>
+        <v-alert
+          :type="hourlyRateSettings ? 'success' : 'info'"
+          variant="tonal"
+          density="compact"
+          class="mt-1"
+        >
+          <div v-if="hourlyRateSettings">
+            已啟用成本與績效計算：
+            資訊服務組 {{ formatRate(hourlyRateSettings.informationService) }}、
+            前端開發課 {{ formatRate(hourlyRateSettings.frontendDevelopment) }}、
+            後端開發課 {{ formatRate(hourlyRateSettings.backendDevelopment) }}
+          </div>
+          <div v-else>
+            尚未啟用成本與績效計算；仍可下載 PPT，當期績效將顯示 —，成本區顯示成本與績效尚未計算。
+          </div>
+        </v-alert>
+      </v-card-text>
+    </v-card>
+
     <!-- 兩個下載按鈕 -->
     <div class="d-flex gap-3 flex-wrap">
       <!-- 測試版（Phase 4）-->
@@ -64,6 +130,16 @@
       density="compact"
     />
 
+    <!-- 専案對應表阻擋提示 -->
+    <v-alert
+      v-if="result.dataQuality.projectMappingBlocked"
+      type="error"
+      variant="tonal"
+      class="mt-3"
+      density="compact"
+      text="專案工時尚未成功對應至專案內容，請確認專案對應表。完整版 PPT 已停用。"
+    />
+
     <!-- 完整版產生完成統計 -->
     <v-card
       v-if="presentationStats && !isGeneratingFull"
@@ -107,12 +183,25 @@
   import type { ProjectContentResult } from '@/types/project'
   import type { ParsedImageEntry } from '@/types/image'
   import type { FullPresentationResult, Phase5ProgressStep } from '@/types/ppt'
+  import type { HourlyRateSettings } from '@/types/projectCost'
   import { QUARTER_CONFIG } from '@/config/quarterConfig'
-  import { renderWorkTypePieChart } from '@/services/chartRenderer'
+  import {
+    renderMonthlyWorkTypeChart,
+    renderMonthlyProjectMaintenanceChart,
+    renderModuleWorkHoursChart,
+    renderModuleWorkforceChart,
+    renderWorkTypePieChart,
+  } from '@/services/chartRenderer'
   import { preparePptSlideData, assemblePptBlob } from '@/services/pptxBuilder'
   import { triggerPptDownload, revokeAfterTick } from '@/services/downloadService'
   import { buildImageRepository } from '@/services/imagePresentationService'
   import { buildFullPresentation } from '@/services/fullPptxBuilder'
+  import {
+    createDefaultHourlyRateInputs,
+    formatHourlyRate,
+    hourlyRateInputError,
+    resolveHourlyRateSettings,
+  } from '@/services/hourlyRateSettings'
   import { PPT_MIME_TYPE } from '@/services/pptxBuilder'
 
   const props = defineProps<{
@@ -140,10 +229,26 @@
   const currentProgressStep = ref<Phase5ProgressStep | null>(null)
   const completedSteps = ref<Set<Phase5ProgressStep>>(new Set())
   const presentationStats = ref<FullPresentationResult | null>(null)
+  const hourlyRateInputs = ref(createDefaultHourlyRateInputs())
 
   const canGenerateFull = computed(
-    () => props.projectContent !== null && props.projectContent !== undefined
+    () =>
+      props.projectContent !== null &&
+      props.projectContent !== undefined &&
+      !props.result.dataQuality.projectMappingBlocked
   )
+
+  function rateError(value: string): string {
+    return hourlyRateInputError(value)
+  }
+
+  function formatRate(value: number | undefined): string {
+    return formatHourlyRate(value)
+  }
+
+  const hourlyRateSettings = computed<HourlyRateSettings | undefined>(() => {
+    return resolveHourlyRateSettings(hourlyRateInputs.value)
+  })
 
   const progressStepDefs: { key: Phase5ProgressStep; label: string }[] = [
     { key: 'preparing-content', label: '整理專案內容' },
@@ -204,6 +309,20 @@
     try {
       const cumulativeChart = renderWorkTypePieChart(props.result.cumulative.workHours)
       const quarterChart = renderWorkTypePieChart(props.result.quarterSummary.workHours)
+      const scopeAnalysis = props.result.presentationAnalysis.presentationScopeAnalysis
+      const workHoursCharts = props.result.presentationAnalysis.presentationWorkHoursCharts
+        ?? props.result.presentationAnalysis.moduleWorkHoursCharts
+      const presentationCharts = {
+        moduleWorkHours: workHoursCharts.map((chart) => ({
+          chart,
+          imageBase64: renderModuleWorkHoursChart(chart),
+        })),
+        moduleWorkforce: renderModuleWorkforceChart(scopeAnalysis?.moduleWorkforce ?? props.result.presentationAnalysis.moduleWorkforce),
+        monthlyWorkType:
+          props.result.presentationAnalysis.monthlyRatioBasis === 'project-and-maintenance-only'
+            ? renderMonthlyProjectMaintenanceChart(props.result.presentationAnalysis.monthlyWorkTypes)
+            : renderMonthlyWorkTypeChart(props.result.presentationAnalysis.monthlyWorkTypes),
+      }
 
       // 建立圖片資料庫（從 ZIP 提取已驗證圖片）
       currentProgressStep.value = 'processing-images'
@@ -230,7 +349,13 @@
       const projectContent = props.projectContent ?? emptyProjectContent
 
       const stats = await buildFullPresentation(
-        { analysis: props.result, projectContent, images },
+        {
+          analysis: props.result,
+          projectContent,
+          images,
+          presentationCharts,
+          hourlyRateSettings: hourlyRateSettings.value,
+        },
         cumulativeChart,
         quarterChart,
         (step) => {

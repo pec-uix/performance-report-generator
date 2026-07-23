@@ -12,6 +12,9 @@ import type {
   QuarterDateRanges,
 } from './analysis'
 import type { ValidationIssue } from './validation'
+import type { PresentationAnalysisResult } from './presentationAnalysis'
+import type { PresentationScope } from './presentationScope'
+import type { ProjectOrganizationHours } from './projectCost'
 
 /** Phase 3 完整報告分析結果 */
 export interface ReportAnalysisResult {
@@ -41,6 +44,15 @@ export interface ReportAnalysisResult {
 
   revenue: RevenueSummary
 
+  /** Phase 6A Presentation 專用衍生圖表資料，不改變既有核心計算口徑 */
+  presentationAnalysis: PresentationAnalysisResult
+
+  /** Phase 6A-5 PPT 成果頁白名單；整體分析仍使用完整工時資料 */
+  presentationScope?: PresentationScope
+
+  /** Phase 6E 成本計算用：白名單主項三組織當季工時，不改成果頁主工時口徑 */
+  projectCostHoursByItemNo?: Record<string, ProjectOrganizationHours>
+
   dataQuality: {
     invalidDateRows: number
     invalidHourRows: number
@@ -49,6 +61,14 @@ export interface ReportAnalysisResult {
     unmatchedMaintenanceRows: number
     unclassifiedRows: number
     unclassifiedHours: number
+    /** 専案對應表是否存在且欄位完整 */
+    projectMappingAvailable: boolean
+    /** 阻擋旗標：有専案工時但對應後全為 0 */
+    projectMappingBlocked: boolean
+    /** 未對應至任何項次的累計専案工時 */
+    unmappedProjectHours: number
+    /** 未對應至任何項次的累計専案工時記錄筆數 */
+    unmappedProjectRecords: number
   }
 
   issues: ValidationIssue[]

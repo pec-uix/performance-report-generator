@@ -72,16 +72,17 @@ export function validateProjectItems(items: ProjectItem[]): ItemValidationResult
 
     if (itemType === 'invalid') {
       invalidCount++
+      const displayRow = item.sourceRow ?? item.rowIndex + 2
       const msg =
         normalized === ''
-          ? `第 ${item.rowIndex + 2} 列的項次為空白`
-          : `第 ${item.rowIndex + 2} 列的項次「${normalized}」格式無效（只支援純整數或「整數-整數」格式）`
+          ? `第 ${displayRow} 列的項次為空白`
+          : `第 ${displayRow} 列的項次「${normalized}」格式無效（只支援純整數或「整數-整數」格式）`
       issues.push({
         code: 'PI_INVALID_ITEM_NO',
         severity: 'error',
         source: 'project-item',
         message: msg,
-        row: item.rowIndex + 2,
+        row: displayRow,
         itemNo: normalized,
       })
     }
@@ -90,12 +91,13 @@ export function validateProjectItems(items: ProjectItem[]): ItemValidationResult
       if (seenItemNos.has(normalized)) {
         duplicateCount++
         duplicateSet.add(normalized)
+        const displayRow = item.sourceRow ?? item.rowIndex + 2
         issues.push({
           code: 'PI_DUPLICATE_ITEM_NO',
           severity: 'error',
           source: 'project-item',
-          message: `項次「${normalized}」重複，第 ${item.rowIndex + 2} 列`,
-          row: item.rowIndex + 2,
+          message: `項次「${normalized}」重複，第 ${displayRow} 列`,
+          row: displayRow,
           itemNo: normalized,
         })
       } else {
@@ -121,6 +123,7 @@ export function validateProjectItems(items: ProjectItem[]): ItemValidationResult
     if (!item.parentItemNo) continue
 
     const parentArrayIdx = validMainItems.get(item.parentItemNo)
+    const displayRow = item.sourceRow ?? item.rowIndex + 2
     if (parentArrayIdx === undefined) {
       orphanChildCount++
       issues.push({
@@ -128,7 +131,7 @@ export function validateProjectItems(items: ProjectItem[]): ItemValidationResult
         severity: 'error',
         source: 'project-item',
         message: `子專案「${item.normalizedItemNo}」找不到對應的主專案「${item.parentItemNo}」`,
-        row: item.rowIndex + 2,
+        row: displayRow,
         itemNo: item.normalizedItemNo,
       })
     } else if (parentArrayIdx > idx) {
@@ -137,7 +140,7 @@ export function validateProjectItems(items: ProjectItem[]): ItemValidationResult
         severity: 'warning',
         source: 'project-item',
         message: `子專案「${item.normalizedItemNo}」出現在主專案「${item.parentItemNo}」之前`,
-        row: item.rowIndex + 2,
+        row: displayRow,
         itemNo: item.normalizedItemNo,
       })
     }

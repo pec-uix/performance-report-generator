@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { ReportAnalysisResult } from '@/types/reportAnalysis'
 import type { ProjectContentResult, ProjectItem } from '@/types/project'
+import type { PresentationAnalysisResult } from '@/types/presentationAnalysis'
 
 // ── PptxGenJS mock ─────────────────────────────────────────────────────────
 
@@ -43,6 +44,18 @@ import { buildFullPresentation } from '@/services/fullPptxBuilder'
 
 // ── 輔助 ──────────────────────────────────────────────────────────────────
 
+function makePresentationAnalysis(): PresentationAnalysisResult {
+  return {
+    moduleWorkHoursCharts: [],
+    moduleWorkforce: [],
+    monthlyWorkTypes: [],
+    workforceConfigured: false,
+    monthlyRatioBasis: 'unconfirmed',
+    monthlyPeriod: { start: '2025-12-01', end: '2026-07-31' },
+    issues: [],
+  }
+}
+
 function makeAnalysis(groups: { mainItemNo: string; name?: string }[]): ReportAnalysisResult {
   return {
     quarter: 'S2',
@@ -71,7 +84,8 @@ function makeAnalysis(groups: { mainItemNo: string; name?: string }[]): ReportAn
     cumulativeProjectRanking: [],
     quarterProjectRanking: [],
     revenue: { configured: false, cumulativeRevenue: null, quarterRevenue: null, revenuePerHour: null, inputOutputRatio: null, issues: [] },
-    dataQuality: { invalidDateRows: 0, invalidHourRows: 0, unmatchedPeopleRows: 0, unmatchedProjectRows: 0, unmatchedMaintenanceRows: 0, unclassifiedRows: 0, unclassifiedHours: 0 },
+    presentationAnalysis: makePresentationAnalysis(),
+    dataQuality: { invalidDateRows: 0, invalidHourRows: 0, unmatchedPeopleRows: 0, unmatchedProjectRows: 0, unmatchedMaintenanceRows: 0, unclassifiedRows: 0, unclassifiedHours: 0, projectMappingAvailable: false, projectMappingBlocked: false, unmappedProjectHours: 0, unmappedProjectRecords: 0 },
     issues: [],
     metadata: { calculatedAt: '2026-07-23T10:00:00.000Z', sourceRowCounts: {} },
   }
@@ -84,7 +98,7 @@ function makeProjectContentWithImages(
   const item: ProjectItem = {
     rowIndex: 0, rawItemNo: mainItemNo, normalizedItemNo: mainItemNo,
     itemType: 'main', data: {}, imageRefs: imageFilenames.length > 0
-      ? [{ column: '圖片展示_成果', filenames: imageFilenames }]
+      ? [{ column: '已完成工作事項_圖片展示', filenames: imageFilenames }]
       : [],
   }
   return {
@@ -186,7 +200,7 @@ describe('projectSlides', () => {
       { analysis, projectContent: pc, images: emptyRepo },
       null, null
     )
-    expect(result.warnings.some((w) => w.code === 'P5_IMAGE_NOT_FOUND')).toBe(true)
+    expect(result.warnings.some((w) => w.code === 'PROJECT_IMAGE_NOT_FOUND')).toBe(true)
     // 用了 addText 顯示占位訊息
     const addTextCalls = slideCallHistory.reduce(
       (acc, s) => acc + s.addText.mock.calls.length, 0
@@ -200,7 +214,7 @@ describe('projectSlides', () => {
     // 第 2 個專案有圖片，第 1 個圖片缺失
     const item2: ProjectItem = {
       rowIndex: 1, rawItemNo: '2.0', normalizedItemNo: '2.0', itemType: 'main',
-      data: {}, imageRefs: [{ column: '圖片展示_成果', filenames: ['good.png'] }],
+      data: {}, imageRefs: [{ column: '已完成工作事項_圖片展示', filenames: ['good.png'] }],
     }
     pc.items.push(item2)
     const repo = makeImageRepo(['good.png'])
@@ -225,24 +239,19 @@ describe('projectSlides', () => {
     ).resolves.not.toThrow()
   })
 
-  it('isEmpty 頁面顯示「本期無可呈現內容」文字', async () => {
+  it('無成果內容時仍保留專案摘要頁', async () => {
     const analysis = makeAnalysis([{ mainItemNo: '1.0' }])
     const pc = makeProjectContentWithImages('1.0', []) // 無圖片
     const emptyItem = pc.items[0]
     emptyItem.data = {} // 無文字
     await buildFullPresentation({ analysis, projectContent: pc, images: new Map() }, null, null)
-    const allTextCalls = slideCallHistory.flatMap((s) =>
+    const allText = slideCallHistory.flatMap((s) =>
       s.addText.mock.calls.map((c) => String(c[0]))
     )
-    expect(allTextCalls.some((t) => t.includes('無可呈現'))).toBe(true)
+    expect(allText.some((t) => t.includes('PROJECT CODE'))).toBe(true)
   })
 
   it('圖片版型：1 張圖的尺寸大於 2 張圖中的單張尺寸', async () => {
-    // 1 張圖時 w = contentW，2 張圖時 w = (contentW-gap)/2
-    const contentW = 9.4
-    const gap = 0.1
-    const twoImgW = (contentW - gap) / 2
-
     const analysis1 = makeAnalysis([{ mainItemNo: '1.0' }])
     const pc1 = makeProjectContentWithImages('1.0', ['img1.png'])
     const repo1 = makeImageRepo(['img1.png'])
@@ -261,17 +270,98 @@ describe('projectSlides', () => {
     const twoImgActualW = (calls2[0]?.[0] as { w?: number } | undefined)?.w ?? 0
 
     expect(oneImgW).toBeGreaterThan(twoImgActualW)
-    expect(twoImgActualW).toBeCloseTo(twoImgW, 1)
+    expect(calls2).toHaveLength(2)
+    expect(twoImgActualW).toBeGreaterThan(0)
   })
 
-  it('投影片標題標示項次與專案名稱', async () => {
+  it('投影片標題標示專案名稱，且不把 itemNo 當 PROJECT CODE', async () => {
     const analysis = makeAnalysis([{ mainItemNo: '2.1', name: '核心系統' }])
     const pc = makeProjectContentWithImages('2.1', [])
     await buildFullPresentation({ analysis, projectContent: pc, images: new Map() }, null, null)
     const allTextCalls = slideCallHistory.flatMap((s) =>
       s.addText.mock.calls.map((c) => String(c[0]))
     )
-    expect(allTextCalls.some((t) => t.includes('2.1'))).toBe(true)
+    expect(allTextCalls.some((t) => t.includes('PROJECT CODE'))).toBe(true)
+    expect(allTextCalls.some((t) => t.includes('PROJECT CODE  2.1'))).toBe(false)
     expect(allTextCalls.some((t) => t.includes('核心系統'))).toBe(true)
+  })
+
+  it('四大成果區文字與 URL 內容可顯示', async () => {
+    const analysis = makeAnalysis([{ mainItemNo: '1.0' }])
+    const item: ProjectItem = {
+      rowIndex: 0, rawItemNo: '1.0', normalizedItemNo: '1.0', itemType: 'main',
+      data: {
+        '已完成工作事項_描述': '完成工作',
+        '預計完成工作_描述': '預計工作',
+        'UIX執行成果_文字/連結描述': 'UIX 說明 https://example.com/uix',
+        '執行成果_文字/連結描述': '一般成果 https://example.com/result',
+      },
+      imageRefs: [],
+    }
+    const pc: ProjectContentResult = {
+      sheetFound: true, alternativeSheetFound: false, totalRows: 1,
+      mainCount: 1, childCount: 0, invalidCount: 0, duplicateCount: 0,
+      orphanChildCount: 0, items: [item], detectedHeaders: [], issues: [],
+    }
+
+    await buildFullPresentation({ analysis, projectContent: pc, images: new Map() }, null, null)
+    const allTextCalls = slideCallHistory.flatMap((s) =>
+      s.addText.mock.calls.map((c) => String(c[0]))
+    )
+    expect(allTextCalls.some((t) => t.includes('已完成工作事項'))).toBe(true)
+    expect(allTextCalls.some((t) => t.includes('預計完成工作'))).toBe(true)
+    expect(allTextCalls.some((t) => t.includes('UIX執行成果'))).toBe(true)
+    expect(allTextCalls.some((t) => t.includes('執行成果'))).toBe(true)
+    expect(allTextCalls.some((t) => t.includes('UIX 說明'))).toBe(true)
+    expect(allTextCalls.some((t) => t.includes('一般成果'))).toBe(true)
+    expect(allTextCalls.some((t) => t.includes('連結 1'))).toBe(true)
+    expect(allTextCalls.some((t) => t.includes('連結 2'))).toBe(true)
+  })
+
+  it('中文檔名與大小寫差異依 basename lowercase 規則嵌入', async () => {
+    const analysis = makeAnalysis([{ mainItemNo: '1.0' }])
+    const pc = makeProjectContentWithImages('1.0', ['folder/成果圖.PNG'])
+    const repo = new Map<string, Uint8Array>([['成果圖.png', new Uint8Array([1, 2, 3])]])
+    await buildFullPresentation({ analysis, projectContent: pc, images: repo }, null, null)
+    const imageSlideCalls = slideCallHistory.reduce(
+      (acc, s) => acc + s.addImage.mock.calls.length, 0
+    )
+    expect(imageSlideCalls).toBeGreaterThanOrEqual(1)
+  })
+
+  it('圖片 Data URL 失敗時顯示檔名占位且不空白', async () => {
+    const analysis = makeAnalysis([{ mainItemNo: '1.0' }])
+    const pc = makeProjectContentWithImages('1.0', ['bad.png'])
+    const invalidRepo = new Map<string, Uint8Array | undefined>([['bad.png', undefined]])
+    const result = await buildFullPresentation(
+      { analysis, projectContent: pc, images: invalidRepo as ReadonlyMap<string, Uint8Array> },
+      null, null
+    )
+    const allTextCalls = slideCallHistory.flatMap((s) =>
+      s.addText.mock.calls.map((c) => String(c[0]))
+    )
+    expect(result.warnings.some((w) => w.code === 'PROJECT_IMAGE_DATA_INVALID')).toBe(true)
+    expect(allTextCalls.some((t) => t.includes('圖片未成功載入：bad.png'))).toBe(true)
+  })
+
+  it('addImage 失敗時顯示占位並產生 render warning', async () => {
+    mockInstanceP.addSlide.mockImplementation(() => {
+      const s = createTrackedSlide()
+      s.addImage.mockImplementationOnce(() => {
+        throw new Error('render failed')
+      })
+      slideCallHistory.push(s)
+      return s
+    })
+
+    const analysis = makeAnalysis([{ mainItemNo: '1.0' }])
+    const pc = makeProjectContentWithImages('1.0', ['render.png'])
+    const repo = makeImageRepo(['render.png'])
+    const result = await buildFullPresentation({ analysis, projectContent: pc, images: repo }, null, null)
+    const allTextCalls = slideCallHistory.flatMap((s) =>
+      s.addText.mock.calls.map((c) => String(c[0]))
+    )
+    expect(result.warnings.some((w) => w.code === 'PROJECT_IMAGE_RENDER_FAILED')).toBe(true)
+    expect(allTextCalls.some((t) => t.includes('圖片未成功載入：render.png'))).toBe(true)
   })
 })

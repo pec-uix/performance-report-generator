@@ -37,6 +37,7 @@ desktop.ini
 
 # 覆蓋率報告
 coverage/
+test-result.json
 
 # Vite 快取
 .vite/

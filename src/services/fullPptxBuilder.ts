@@ -22,6 +22,7 @@ import type {
   Phase5ProgressStep,
   FullPresentationResult,
   ImageRepository,
+  PresentationChartImage,
 } from '@/types/ppt'
 import {
   PRES_FONT,
@@ -30,29 +31,28 @@ import {
   PRES_LAYOUT,
   PRES_TABLE_BORDER,
 } from '@/config/presentationTheme'
+import { PPT_THEME } from './pptTheme'
+import {
+  addContentCard,
+  addImageFrame,
+  addKpiCard,
+  addLinkRow,
+  addProjectHeader,
+  addSlideFooter,
+  addSlideHeader,
+  addWarningBlock,
+} from './pptComponents'
 import { PPT_MIME_TYPE, assemblePptBlob, preparePptSlideData } from './pptxBuilder'
 import {
-  buildProjectSlideContents,
-  type ProjectTextSlide,
-  type ProjectImageSlide,
-} from './slidePaginationService'
+  buildExecutiveProjectSlides,
+  type ExecutiveImagePlacement,
+  type ExecutiveProjectSlide,
+} from './executiveProjectPaginationService'
 import { getImageDataUrl } from './imagePresentationService'
-import { truncateTextSafely } from './textPaginationService'
 import { QUARTER_CONFIG } from '@/config/quarterConfig'
+import { assertPptText } from './pptTextSafety'
 
 // ── 常數 ──────────────────────────────────────────────────────────────────
-
-/** 封面前固定頁數（封面本身不算頁碼） */
-const FIXED_SLIDES_BEFORE_PROJECTS = 7
-/** 結尾固定頁數 */
-const FIXED_SLIDES_AFTER_PROJECTS = 1
-/** 固定頁總數（封面 + 6 摘要 + 結尾） */
-const TOTAL_FIXED_SLIDES = FIXED_SLIDES_BEFORE_PROJECTS + FIXED_SLIDES_AFTER_PROJECTS
-
-/** 最大文字截斷行數（避免溢出） */
-const MAX_TEXT_LINES_PER_BLOCK = 8
-/** 每行估算字元數 */
-const CHARS_PER_LINE = 36
 
 // ── 格式化輔助 ────────────────────────────────────────────────────────────
 
@@ -60,26 +60,55 @@ function fmtH(hours: number): string {
   return `${hours.toFixed(1)} H`
 }
 
-function fmtPct(ratio: number): string {
-  return `${(ratio * 100).toFixed(0)}%`
+function fmtPct2(ratio: number): string {
+  return `${(ratio * 100).toFixed(2)}%`
 }
 
-function fmtRev(rev: number | null): string {
-  if (rev === null) return '—'
-  return rev.toLocaleString()
+function fmtMoney(rev: number | null | undefined): string {
+  if (rev === null || rev === undefined) return '—'
+  const sign = rev < 0 ? '-' : ''
+  return `NT$${sign}${Math.abs(rev).toLocaleString('zh-TW', {
+    minimumFractionDigits: Number.isInteger(rev) ? 0 : 2,
+    maximumFractionDigits: 2,
+  })}`
+}
+
+function fmtRate(rate: number | undefined): string {
+  return rate === undefined ? '—' : `${fmtMoney(rate)} / H`
+}
+
+function costStatusCaption(status: string): string {
+  if (status === 'calculated') return '收入－三組織成本'
+  if (status === 'missing-revenue') return '年度收入尚未提供'
+  if (status === 'unmatched-work-hours') return '工時未匹配'
+  return '尚未設定平均時薪'
+}
+
+function getPresentationProjectCount(analysis: ReportAnalysisResult): number {
+  return analysis.presentationScope?.mainItems.length ?? analysis.projectGroups.length
+}
+
+function getCoverYear(analysis: ReportAnalysisResult): string {
+  const year = analysis.dateRanges.quarter.end.slice(0, 4)
+  if (/^\d{4}$/.test(year)) return year
+  return QUARTER_CONFIG[analysis.quarter].label.split(' ')[0] ?? ''
+}
+
+function getCoverMonth(quarter: ReportAnalysisResult['quarter']): string {
+  return { S1: '03', S2: '07', S3: '11' }[quarter]
 }
 
 // ── 表格儲存格輔助 ────────────────────────────────────────────────────────
 
 function hCell(text: string): PptxGenJS.TableCell {
   return {
-    text,
+    text: assertPptText(text, 'PPT table header'),
     options: {
       bold: true,
-      fill: { color: PRES_COLOR.headerBg },
-      color: PRES_COLOR.headerFg,
-      fontSize: PRES_FONT_SIZE.tableHeader,
-      fontFace: PRES_FONT,
+      fill: { color: PPT_THEME.color.navy },
+      color: PPT_THEME.color.white,
+      fontSize: 9.5,
+      fontFace: PPT_THEME.font.family,
     },
   }
 }
@@ -91,13 +120,14 @@ function dCell(
   align: PptxGenJS.HAlign = 'left'
 ): PptxGenJS.TableCell {
   return {
-    text,
+    text: assertPptText(text, 'PPT table cell'),
     options: {
-      fill: { color: rowIdx % 2 === 0 ? PRES_COLOR.rowAlt : PRES_COLOR.rowNorm },
-      fontSize: PRES_FONT_SIZE.tableBody,
-      fontFace: PRES_FONT,
+      fill: { color: rowIdx % 2 === 0 ? PPT_THEME.color.surface2 : PPT_THEME.color.white },
+      fontSize: 9.2,
+      fontFace: PPT_THEME.font.family,
       bold,
       align,
+      color: PPT_THEME.color.text,
     },
   }
 }
@@ -112,20 +142,9 @@ function addFooter(
   pageNum: number,
   totalPages: number
 ): void {
-  const L = PRES_LAYOUT
-  slide.addText(
-    `${quarterLabel}  |  ${period}  |  第 ${pageNum} / ${totalPages} 頁  |  本文件由系統依上傳資料產生`,
-    {
-      x: L.padX,
-      y: L.footerY,
-      w: L.contentW,
-      h: L.footerH,
-      fontSize: PRES_FONT_SIZE.footer,
-      fontFace: PRES_FONT,
-      color: PRES_COLOR.footer,
-      align: 'center',
-    }
-  )
+  void quarterLabel
+  void period
+  addSlideFooter(slide, { pageNum, totalPages })
 }
 
 // ── 圖片位置版型 ──────────────────────────────────────────────────────────
@@ -173,46 +192,91 @@ function getImageSlots(count: number): ImageSlot[] {
   ]
 }
 
+function getInlineImageSlots(count: number): ImageSlot[] {
+  const safeCount = Math.min(Math.max(count, 1), 2)
+  if (safeCount === 1) return [{ x: 6.25, y: 2.0, w: 3.15, h: 2.45 }]
+  return [
+    { x: 6.15, y: 2.0, w: 1.6, h: 2.45 },
+    { x: 7.85, y: 2.0, w: 1.6, h: 2.45 },
+  ]
+}
+
 // ── 封面 ──────────────────────────────────────────────────────────────────
 
 function addCoverSlide(pptx: PptxGenJS, analysis: ReportAnalysisResult): void {
   const slide = pptx.addSlide()
-  slide.background = { color: PRES_COLOR.coverBg }
-  const qConfig = QUARTER_CONFIG[analysis.quarter]
+  const T = PPT_THEME
+  slide.background = { color: T.color.white }
+  const year = getCoverYear(analysis)
+  const semester = analysis.quarter
+  const month = getCoverMonth(semester)
+  const projectCount = getPresentationProjectCount(analysis)
+  const badgeText = `PERFORMANCE REPORT ${year}.${month}`
 
-  slide.addText('2026 年度績效報告', {
-    x: 1, y: 1.3, w: 8, h: 0.8,
-    align: 'center', fontSize: PRES_FONT_SIZE.coverTitle,
-    bold: true, color: PRES_COLOR.coverText, fontFace: PRES_FONT,
+  slide.addText(badgeText, {
+    x: 3.35, y: 0.68, w: 3.3, h: 0.34,
+    fontFace: T.font.family, fontSize: 8.8,
+    bold: true, color: '5F758A',
+    align: 'center', valign: 'middle',
+    breakLine: false,
+    margin: 0.02,
+    fill: { color: 'EAF1F7' },
   })
-  slide.addText(qConfig.label, {
-    x: 1, y: 2.25, w: 8, h: 0.55,
-    align: 'center', fontSize: PRES_FONT_SIZE.coverSubtitle,
-    color: PRES_COLOR.coverSubtext, fontFace: PRES_FONT,
+  slide.addText(`${year} ${semester} 專案績效報告`, {
+    x: 0.85, y: 1.72, w: 8.3, h: 0.78,
+    fontFace: T.font.family, fontSize: 36,
+    bold: true, color: T.color.navy,
+    align: 'center',
+    fit: 'shrink',
   })
-  slide.addText(`報告期間：${analysis.dateRanges.quarter.start} ～ ${analysis.dateRanges.quarter.end}`, {
-    x: 1, y: 2.95, w: 8, h: 0.32,
-    align: 'center', fontSize: 13,
-    color: PRES_COLOR.coverSubtext, fontFace: PRES_FONT,
+  slide.addText('行動前端開發課', {
+    x: 3.0, y: 2.68, w: 4.0, h: 0.3,
+    fontFace: T.font.family, fontSize: 14,
+    color: '6F8295',
+    align: 'center',
   })
-  slide.addText(`累計期間：${analysis.dateRanges.cumulative.start} ～ ${analysis.dateRanges.cumulative.end}`, {
-    x: 1, y: 3.3, w: 8, h: 0.32,
-    align: 'center', fontSize: 13,
-    color: PRES_COLOR.coverSubtext, fontFace: PRES_FONT,
+
+  slide.addText(String(projectCount), {
+    x: 3.0, y: 3.75, w: 1.55, h: 0.48,
+    fontFace: T.font.family, fontSize: 28,
+    bold: true, color: T.color.navy,
+    align: 'center',
   })
-  slide.addText(`製表時間：${new Date(analysis.metadata.calculatedAt).toLocaleString('zh-TW')}`, {
-    x: 1, y: 5.1, w: 8, h: 0.28,
-    align: 'center', fontSize: 10,
-    color: PRES_COLOR.coverCaption, fontFace: PRES_FONT,
+  slide.addText('PROJECTS', {
+    x: 2.75, y: 4.28, w: 2.05, h: 0.18,
+    fontFace: T.font.family, fontSize: 8.5,
+    bold: true, color: '8DA0B1',
+    align: 'center',
+  })
+
+  slide.addText('', {
+    x: 4.99, y: 3.74, w: 0.01, h: 0.76,
+    margin: 0,
+    fill: { color: 'D9E2EA' },
+  })
+
+  slide.addText(semester, {
+    x: 5.45, y: 3.75, w: 1.55, h: 0.48,
+    fontFace: T.font.family, fontSize: 28,
+    bold: true, color: T.color.navy,
+    align: 'center',
+  })
+  slide.addText('SEMESTER', {
+    x: 5.2, y: 4.28, w: 2.05, h: 0.18,
+    fontFace: T.font.family, fontSize: 8.5,
+    bold: true, color: '8DA0B1',
+    align: 'center',
   })
   // 封面無頁碼、無頁尾
 }
 
 // ── 本期摘要 ──────────────────────────────────────────────────────────────
 
-function addExecutiveSummarySlide(
+// ── Phase 6A-2 核心分析圖 ────────────────────────────────────────────────
+
+function addModuleWorkHoursChartSlide(
   pptx: PptxGenJS,
-  analysis: ReportAnalysisResult,
+  chartImage: PresentationChartImage,
   pn: number,
   total: number,
   quarterLabel: string,
@@ -220,59 +284,45 @@ function addExecutiveSummarySlide(
 ): void {
   const slide = pptx.addSlide()
   const L = PRES_LAYOUT
+  const chart = chartImage.chart
+  const title =
+    chart.periodType === 'cumulative'
+      ? '工作成果說明－工時（累計）'
+      : '工作成果說明－工時（當季）'
 
-  slide.addText('本期摘要', {
-    x: L.padX, y: L.titleY, w: L.contentW, h: L.titleH,
-    fontSize: PRES_FONT_SIZE.slideTitle, bold: true,
-    color: PRES_COLOR.titleText, fontFace: PRES_FONT,
+  addSlideHeader(slide, {
+    title,
+    subtitle: `前端開發課工時分布；期間：${chart.startDate} ～ ${chart.endDate}；總工時：${fmtH(chart.totalHours)}`,
   })
 
-  const rows: PptxGenJS.TableRow[] = [
-    [hCell('項目'), hCell('累計'), hCell('單季')],
-    [
-      dCell('總工時 (H)', 0),
-      dCell(fmtH(analysis.cumulative.workHours.totalHours), 0, true),
-      dCell(fmtH(analysis.quarterSummary.workHours.totalHours), 0, true),
-    ],
-    [
-      dCell('專案工時', 1),
-      dCell(`${fmtH(analysis.cumulative.workHours.projectHours)}  (${fmtPct(analysis.cumulative.workHours.projectRatio)})`, 1),
-      dCell(`${fmtH(analysis.quarterSummary.workHours.projectHours)}  (${fmtPct(analysis.quarterSummary.workHours.projectRatio)})`, 1),
-    ],
-    [
-      dCell('維運工時', 0),
-      dCell(`${fmtH(analysis.cumulative.workHours.maintenanceHours)}  (${fmtPct(analysis.cumulative.workHours.maintenanceRatio)})`, 0),
-      dCell(`${fmtH(analysis.quarterSummary.workHours.maintenanceHours)}  (${fmtPct(analysis.quarterSummary.workHours.maintenanceRatio)})`, 0),
-    ],
-    [
-      dCell('出勤人數', 1),
-      dCell(`${analysis.cumulative.workforce.activePeopleCount} 人`, 1, true),
-      dCell(`${analysis.quarterSummary.workforce.activePeopleCount} 人`, 1, true),
-    ],
-    [
-      dCell('主專案數', 0),
-      dCell(String(analysis.projectGroups.length), 0, true, 'center'),
-      dCell(String(analysis.projectGroups.length), 0, true, 'center'),
-    ],
-  ]
-
-  slide.addTable(rows, {
-    x: L.padX, y: L.contentY, w: L.contentW, h: 3.8,
-    colW: [3.0, 3.2, 3.2],
-    border: PRES_TABLE_BORDER as PptxGenJS.BorderProps,
-    fontSize: PRES_FONT_SIZE.tableBody, fontFace: PRES_FONT,
-  })
+  if (chartImage.imageBase64) {
+    slide.addImage({ data: chartImage.imageBase64, x: L.padX, y: 1.05, w: L.contentW, h: 4.15 })
+  } else if (chart.totalHours <= 0 || chart.items.length === 0) {
+    addWarningBlock(slide, { x: L.padX, y: L.contentY, w: L.contentW, h: 0.7 }, '此期間無模組工時資料，未建立圖表。')
+  } else {
+    const rows: PptxGenJS.TableRow[] = [
+      [hCell('模組'), hCell('工時'), hCell('占比')],
+      ...chart.items.map((item, i) => [
+        dCell(item.displayName, i),
+        dCell(fmtH(item.hours), i, true, 'center'),
+        dCell(fmtPct2(item.ratio), i, false, 'center'),
+      ]),
+    ]
+    slide.addTable(rows, {
+      x: L.padX, y: L.contentY, w: L.contentW, h: 3.8,
+      colW: [5.2, 2.1, 2.1],
+      border: PRES_TABLE_BORDER as PptxGenJS.BorderProps,
+      fontSize: PRES_FONT_SIZE.tableBody,
+      fontFace: PRES_FONT,
+    })
+  }
 
   addFooter(slide, quarterLabel, period, pn, total)
 }
 
-// ── 工時摘要 ──────────────────────────────────────────────────────────────
-
-function addWorkHoursSummarySlide(
+function addModuleWorkforcePlaceholderSlide(
   pptx: PptxGenJS,
-  title: string,
   analysis: ReportAnalysisResult,
-  isCumulative: boolean,
   chartBase64: string | null,
   pn: number,
   total: number,
@@ -281,163 +331,45 @@ function addWorkHoursSummarySlide(
 ): void {
   const slide = pptx.addSlide()
   const L = PRES_LAYOUT
-  const wh = isCumulative ? analysis.cumulative.workHours : analysis.quarterSummary.workHours
-  const wf = isCumulative ? analysis.cumulative.workforce : analysis.quarterSummary.workforce
-  const periodLabel = isCumulative
-    ? `累計期間：${analysis.dateRanges.cumulative.start} ～ ${analysis.dateRanges.cumulative.end}`
-    : `單季期間：${analysis.dateRanges.quarter.start} ～ ${analysis.dateRanges.quarter.end}`
-  const hasChart = chartBase64 !== null
 
-  slide.addText(title, {
-    x: L.padX, y: L.titleY, w: L.contentW, h: L.titleH,
-    fontSize: PRES_FONT_SIZE.slideTitle, bold: true,
-    color: PRES_COLOR.titleText, fontFace: PRES_FONT,
+  addSlideHeader(slide, {
+    title: '工作成果說明－白名單專案人力',
+    subtitle: '前端開發課白名單專案人力投入',
   })
-  slide.addText(periodLabel, {
-    x: L.padX, y: L.subtitleY, w: L.contentW, h: L.subtitleH,
-    fontSize: PRES_FONT_SIZE.caption, color: PRES_COLOR.subtle, fontFace: PRES_FONT,
-  })
-
-  const tableW = hasChart ? 5.0 : L.contentW
-  const colW: [number, number] = hasChart ? [2.5, 2.5] : [4.7, 4.7]
-  const statRows: PptxGenJS.TableRow[] = [
-    [hCell('項目'), hCell('數值')],
-    [dCell('總工時', 0), dCell(fmtH(wh.totalHours), 0, true)],
-    [dCell('專案工時', 1), dCell(`${fmtH(wh.projectHours)}  (${fmtPct(wh.projectRatio)})`, 1)],
-    [dCell('維運工時', 0), dCell(`${fmtH(wh.maintenanceHours)}  (${fmtPct(wh.maintenanceRatio)})`, 0)],
-    [dCell('其他工時', 1), dCell(`${fmtH(wh.otherHours)}  (${fmtPct(wh.otherRatio)})`, 1)],
-    [dCell('出勤人數', 0), dCell(`${wf.activePeopleCount} 人`, 0, true)],
-    [dCell('人均工時', 1), dCell(
-      wf.averageHoursPerPerson !== null ? `${wf.averageHoursPerPerson.toFixed(1)} H/人` : '—', 1
-    )],
-  ]
-
-  slide.addTable(statRows, {
-    x: L.padX, y: L.contentY, w: tableW, h: 3.8,
-    colW, border: PRES_TABLE_BORDER as PptxGenJS.BorderProps,
-    fontSize: PRES_FONT_SIZE.tableBody, fontFace: PRES_FONT,
-  })
-
-  if (hasChart && chartBase64) {
-    slide.addImage({ data: chartBase64, x: 5.5, y: L.contentY, w: 4.2, h: 3.8 })
-  }
-
-  addFooter(slide, quarterLabel, period, pn, total)
-}
-
-// ── 主專案工時排行 ────────────────────────────────────────────────────────
-
-function addRankingSlide(
-  pptx: PptxGenJS,
-  analysis: ReportAnalysisResult,
-  pn: number,
-  total: number,
-  quarterLabel: string,
-  period: string
-): void {
-  const slide = pptx.addSlide()
-  const L = PRES_LAYOUT
-
-  slide.addText('單季主專案工時排行（Top 5）', {
-    x: L.padX, y: L.titleY, w: L.contentW, h: L.titleH,
-    fontSize: PRES_FONT_SIZE.slideTitle, bold: true,
-    color: PRES_COLOR.titleText, fontFace: PRES_FONT,
-  })
-  slide.addText(`單季期間：${analysis.dateRanges.quarter.start} ～ ${analysis.dateRanges.quarter.end}`, {
-    x: L.padX, y: L.subtitleY, w: L.contentW, h: L.subtitleH,
-    fontSize: PRES_FONT_SIZE.caption, color: PRES_COLOR.subtle, fontFace: PRES_FONT,
-  })
-
-  const top5 = analysis.quarterProjectRanking.slice(0, 5)
-  const headerRow: PptxGenJS.TableRow = [
-    hCell('排名'), hCell('主項次'), hCell('專案名稱'),
-    hCell('單季工時 (H)'), hCell('累計工時 (H)'),
-  ]
-  const dataRows: PptxGenJS.TableRow[] = top5.map((g, i) => [
-    dCell(String(i + 1), i, false, 'center'),
-    dCell(g.mainItemNo, i),
-    dCell(g.mainProject.projectName ?? '（未命名）', i),
-    dCell(g.quarterHours.toFixed(1), i, true, 'center'),
-    dCell(g.cumulativeHours.toFixed(1), i, false, 'center'),
-  ])
-
-  slide.addTable([headerRow, ...dataRows], {
-    x: L.padX, y: L.contentY, w: L.contentW, h: 3.5,
-    colW: [0.6, 1.4, 4.1, 1.65, 1.65],
-    border: PRES_TABLE_BORDER as PptxGenJS.BorderProps,
-    fontSize: PRES_FONT_SIZE.tableBody, fontFace: PRES_FONT,
-  })
-
-  slide.addText('排行單位：主專案群組，已包含所屬子項工時。', {
-    x: L.padX, y: 4.75, w: L.contentW, h: 0.28,
-    fontSize: 9, color: PRES_COLOR.footer, italic: true, fontFace: PRES_FONT,
-  })
-
-  addFooter(slide, quarterLabel, period, pn, total)
-}
-
-// ── 收入與績效 ────────────────────────────────────────────────────────────
-
-function addRevenueSlide(
-  pptx: PptxGenJS,
-  analysis: ReportAnalysisResult,
-  pn: number,
-  total: number,
-  quarterLabel: string,
-  period: string
-): void {
-  const slide = pptx.addSlide()
-  const L = PRES_LAYOUT
-
-  slide.addText('收入與績效摘要', {
-    x: L.padX, y: L.titleY, w: L.contentW, h: L.titleH,
-    fontSize: PRES_FONT_SIZE.slideTitle, bold: true,
-    color: PRES_COLOR.titleText, fontFace: PRES_FONT,
-  })
-
-  const rev = analysis.revenue
-  if (!rev.configured) {
-    slide.addText('收入口徑尚未設定，無法顯示收入績效資料。', {
-      x: L.padX, y: L.contentY, w: L.contentW, h: 1.0,
-      fontSize: PRES_FONT_SIZE.bodyText, color: PRES_COLOR.warning,
+  if (chartBase64) {
+    slide.addImage({ data: chartBase64, x: L.padX, y: 1.05, w: L.contentW, h: 4.05 })
+  } else if (analysis.presentationAnalysis.workforceConfigured) {
+    const modules = analysis.presentationAnalysis.presentationScopeAnalysis?.moduleWorkforce ??
+      analysis.presentationAnalysis.moduleWorkforce
+    const rows: PptxGenJS.TableRow[] = [
+      [hCell('模組'), hCell('人力')],
+      ...modules.map((item, i) => [
+        dCell(item.displayName, i),
+        dCell(item.workforce === null ? '—' : item.workforce.toFixed(4), i, true, 'center'),
+      ]),
+    ]
+    slide.addTable(rows, {
+      x: L.padX, y: L.contentY, w: L.contentW, h: 4.05,
+      colW: [6.6, 2.8],
+      border: PRES_TABLE_BORDER as PptxGenJS.BorderProps,
+      fontSize: 8.3,
       fontFace: PRES_FONT,
     })
   } else {
-    const rows: PptxGenJS.TableRow[] = [
-      [hCell('項目'), hCell('累計'), hCell('單季')],
-      [
-        dCell('收入', 0),
-        dCell(fmtRev(rev.cumulativeRevenue), 0, true),
-        dCell(fmtRev(rev.quarterRevenue), 0, true),
-      ],
-      [
-        dCell('每工時收入', 1),
-        dCell(rev.revenuePerHour !== null ? `${rev.revenuePerHour.toFixed(1)}` : '—', 1),
-        dCell('—', 1),
-      ],
-      [
-        dCell('投入產出比', 0),
-        dCell(rev.inputOutputRatio !== null ? `${rev.inputOutputRatio.toFixed(2)}` : '—', 0),
-        dCell('—', 0),
-      ],
-    ]
-
-    slide.addTable(rows, {
-      x: L.padX, y: L.contentY, w: L.contentW, h: 2.5,
-      colW: [3.2, 3.1, 3.1],
-      border: PRES_TABLE_BORDER as PptxGenJS.BorderProps,
-      fontSize: PRES_FONT_SIZE.tableBody, fontFace: PRES_FONT,
-    })
+    addWarningBlock(
+      slide,
+      { x: L.padX, y: 1.05, w: L.contentW, h: 0.75 },
+      '人力公式尚未確認。本階段不使用 activePeopleCount、人均工時或假設人月公式產生數值。',
+    )
   }
 
   addFooter(slide, quarterLabel, period, pn, total)
 }
 
-// ── 資料品質摘要 ──────────────────────────────────────────────────────────
-
-function addDataQualitySlide(
+function addMonthlyWorkTypeSlide(
   pptx: PptxGenJS,
   analysis: ReportAnalysisResult,
+  chartBase64: string | null,
   pn: number,
   total: number,
   quarterLabel: string,
@@ -446,169 +378,375 @@ function addDataQualitySlide(
   const slide = pptx.addSlide()
   const L = PRES_LAYOUT
 
-  slide.addText('資料品質摘要', {
-    x: L.padX, y: L.titleY, w: L.contentW, h: L.titleH,
-    fontSize: PRES_FONT_SIZE.slideTitle, bold: true,
-    color: PRES_COLOR.titleText, fontFace: PRES_FONT,
+  addSlideHeader(slide, {
+    title: '工作成果說明－專案／維運占比',
+    subtitle: analysis.presentationAnalysis.monthlyRatioBasis === 'project-and-maintenance-only'
+      ? '前端開發課每月專案／維運占比與人力'
+      : '每月 project / maintenance / other 工時；比例口徑待確認',
   })
 
-  const dq = analysis.dataQuality
-  const errorCount = analysis.issues.filter((i) => i.severity === 'error').length
-  const warnCount = analysis.issues.filter((i) => i.severity === 'warning').length
-
-  const rows: PptxGenJS.TableRow[] = [
-    [hCell('資料品質項目'), hCell('數量')],
-    [dCell('無效日期列', 0), dCell(String(dq.invalidDateRows), 0, false, 'center')],
-    [dCell('無效工時列', 1), dCell(String(dq.invalidHourRows), 1, false, 'center')],
-    [dCell('未比對人員列', 0), dCell(String(dq.unmatchedPeopleRows), 0, false, 'center')],
-    [dCell('未比對專案列', 1), dCell(String(dq.unmatchedProjectRows), 1, false, 'center')],
-    [dCell('未分類工時列', 0), dCell(String(dq.unclassifiedRows), 0, false, 'center')],
-    [dCell('驗證錯誤', 1), dCell(String(errorCount), 1, errorCount > 0, 'center')],
-    [dCell('驗證警告', 0), dCell(String(warnCount), 0, false, 'center')],
-  ]
-
-  slide.addTable(rows, {
-    x: L.padX, y: L.contentY, w: 6.0, h: 3.6,
-    colW: [4.5, 1.5],
-    border: PRES_TABLE_BORDER as PptxGenJS.BorderProps,
-    fontSize: PRES_FONT_SIZE.tableBody, fontFace: PRES_FONT,
-  })
-
-  addFooter(slide, quarterLabel, period, pn, total)
-}
-
-// ── 專案文字投影片 ────────────────────────────────────────────────────────
-
-function addProjectTextSlide(
-  pptx: PptxGenJS,
-  content: ProjectTextSlide,
-  pn: number,
-  total: number,
-  quarterLabel: string,
-  period: string
-): void {
-  const slide = pptx.addSlide()
-  const L = PRES_LAYOUT
-
-  const titleLabel =
-    content.projectTotalPages > 1
-      ? `[${content.mainItemNo}] ${content.projectName}  (${content.projectPageIndex}/${content.projectTotalPages})`
-      : `[${content.mainItemNo}] ${content.projectName}`
-
-  slide.addText(titleLabel, {
-    x: L.padX, y: L.titleY, w: L.contentW, h: L.titleH,
-    fontSize: PRES_FONT_SIZE.sectionTitle, bold: true,
-    color: PRES_COLOR.titleText, fontFace: PRES_FONT,
-  })
-
-  // 摘要列
-  const s = content.summary
-  const summaryText = [
-    `累計工時：${fmtH(s.cumulativeHours)}`,
-    `單季工時：${fmtH(s.quarterHours)}`,
-    `投入人數：${s.peopleCumulative} 人`,
-    `子項數：${s.childCount}`,
-    s.revenue !== null ? `收入：${fmtRev(s.revenue)}` : null,
-  ]
-    .filter(Boolean)
-    .join('    ')
-
-  slide.addText(summaryText, {
-    x: L.padX, y: L.subtitleY, w: L.contentW, h: 0.3,
-    fontSize: PRES_FONT_SIZE.caption, color: PRES_COLOR.subtle, fontFace: PRES_FONT,
-  })
-
-  // 文字區塊
-  if (content.isEmpty) {
-    slide.addText('本期無可呈現內容', {
-      x: L.padX, y: L.contentY, w: L.contentW, h: 0.5,
-      fontSize: PRES_FONT_SIZE.bodyText, color: PRES_COLOR.warning,
-      fontFace: PRES_FONT, italic: true,
-    })
+  if (chartBase64) {
+    slide.addImage({ data: chartBase64, x: L.padX, y: 1.02, w: L.contentW, h: 4.02 })
   } else {
-    let curY = L.contentY
-    for (const block of content.textBlocks) {
-      if (curY > 4.8) break
-      slide.addText(block.label, {
-        x: L.padX, y: curY, w: L.contentW, h: 0.25,
-        fontSize: PRES_FONT_SIZE.caption, bold: true,
-        color: PRES_COLOR.subtitleText, fontFace: PRES_FONT,
-      })
-      curY += 0.28
-      const safeText = truncateTextSafely(block.text, MAX_TEXT_LINES_PER_BLOCK, CHARS_PER_LINE)
-      const textH = Math.min(Math.ceil(safeText.length / CHARS_PER_LINE) * 0.22 + 0.1, 1.6)
-      slide.addText(safeText, {
-        x: L.padX + 0.1, y: curY, w: L.contentW - 0.1, h: textH,
-        fontSize: PRES_FONT_SIZE.tableBody, color: PRES_COLOR.bodyText,
-        fontFace: PRES_FONT, wrap: true,
-      })
-      curY += textH + 0.1
-    }
+    addWarningBlock(slide, { x: L.padX, y: 2.25, w: L.contentW, h: 0.6 }, '此期間無專案／維運占比圖資料。')
   }
 
   addFooter(slide, quarterLabel, period, pn, total)
 }
 
-// ── 專案圖片投影片 ────────────────────────────────────────────────────────
+function addImageToSlot(
+  slide: PptxGenJS.Slide,
+  image: ExecutiveImagePlacement,
+  slot: ImageSlot,
+  mainItemNo: string,
+  imageRepo: ImageRepository
+): Phase5Warning[] {
+  const warnings: Phase5Warning[] = []
+  const dataUrl = getImageDataUrl(imageRepo, image.basenameKey, image.filename)
 
-function addProjectImageSlide(
+  if (dataUrl) {
+    try {
+      slide.addImage({
+        data: dataUrl,
+        x: slot.x, y: slot.y, w: slot.w, h: slot.h,
+        sizing: { type: 'contain', w: slot.w, h: slot.h },
+      })
+      return warnings
+    } catch {
+      warnings.push({
+        code: 'PROJECT_IMAGE_RENDER_FAILED',
+        message: `圖片未成功載入：${image.filename}`,
+        itemNo: mainItemNo,
+        mainItemNo,
+        sourceItemNo: image.sourceItemNo,
+        fieldName: image.fieldName,
+        category: image.category,
+        filename: image.filename,
+        reason: 'pptx addImage failed',
+      })
+    }
+  } else {
+    warnings.push({
+      code: imageRepo.has(image.basenameKey) ? 'PROJECT_IMAGE_DATA_INVALID' : 'PROJECT_IMAGE_NOT_FOUND',
+      message: `圖片未成功載入：${image.filename}`,
+      itemNo: mainItemNo,
+      mainItemNo,
+      sourceItemNo: image.sourceItemNo,
+      fieldName: image.fieldName,
+      category: image.category,
+      filename: image.filename,
+      reason: imageRepo.has(image.basenameKey) ? 'data url conversion failed' : 'image bytes not found',
+    })
+  }
+
+  slide.addText(`圖片未成功載入：${image.filename}`, {
+    x: slot.x, y: slot.y, w: slot.w, h: slot.h,
+    fontSize: PRES_FONT_SIZE.caption,
+    color: PRES_COLOR.placeholderText,
+    fontFace: PRES_FONT,
+    fill: { color: PRES_COLOR.placeholderBg },
+    align: 'center',
+    valign: 'middle',
+  })
+  return warnings
+}
+
+const PROJECT_SAFE_BOTTOM_Y = 4.9
+const PROJECT_BLOCK_GAP = 0.12
+
+function estimateTextHeight(text: string, fontSize: number, boxWidth: number, lineHeight = 1.25): number {
+  const safeText = text.trim()
+  if (!safeText) return 0.18
+  const charsPerLine = Math.max(16, Math.floor((boxWidth * 96) / fontSize))
+  const lines = safeText.split(/\r?\n/).reduce((sum, line) => {
+    const visualChars = Math.max(line.trim().length, 1)
+    return sum + Math.max(1, Math.ceil(visualChars / charsPerLine))
+  }, 0)
+  return Math.max(0.18, (fontSize / 72) * lineHeight * lines)
+}
+
+function estimateContentCardHeight(section: ExecutiveProjectSlide['sections'][number], width: number): number {
+  const titleHeight = 0.28
+  const titleBodyGap = 0.08
+  const verticalPadding = 0.2
+  return Math.min(
+    2.55,
+    Math.max(
+      0.68,
+      verticalPadding + titleHeight + titleBodyGap +
+        estimateTextHeight(section.text, PPT_THEME.font.bodySmall, width - 0.24)
+    )
+  )
+}
+
+function addCostTable(
+  slide: PptxGenJS.Slide,
+  summary: NonNullable<ExecutiveProjectSlide['overview']>['summary'],
+  box: { x: number; y: number; w: number; h: number }
+): void {
+  const T = PPT_THEME
+  const cost = summary.costBreakdown
+  slide.addText('', {
+    x: box.x,
+    y: box.y,
+    w: box.w,
+    h: box.h,
+    fill: { color: T.color.surface },
+    line: { color: T.color.border, width: T.layout.lineWidth },
+    radius: T.layout.cardRadius,
+  } as PptxGenJS.TextPropsOptions)
+  slide.addText(assertPptText('成本分析', 'cost section title'), {
+    x: box.x + 0.12,
+    y: box.y + 0.08,
+    w: box.w - 0.24,
+    h: 0.18,
+    fontFace: T.font.family,
+    fontSize: 12.5,
+    bold: true,
+    color: T.color.navy2,
+    fit: 'shrink',
+  })
+  if (cost.calculationStatus === 'missing-hourly-rates') {
+    slide.addText(assertPptText('成本與績效尚未計算\n原因：平均時薪未完整設定', 'cost missing rate text'), {
+      x: box.x + 0.12,
+      y: box.y + 0.36,
+      w: box.w - 0.24,
+      h: 0.42,
+      fontFace: T.font.family,
+      fontSize: 10,
+      color: T.color.muted,
+      fit: 'shrink',
+    })
+    return
+  }
+  if (cost.calculationStatus === 'unmatched-work-hours') {
+    slide.addText(assertPptText('成本與績效尚未計算\n原因：本期工時資料尚未匹配', 'cost unmatched text'), {
+      x: box.x + 0.12,
+      y: box.y + 0.36,
+      w: box.w - 0.24,
+      h: 0.42,
+      fontFace: T.font.family,
+      fontSize: 10,
+      color: T.color.muted,
+      fit: 'shrink',
+    })
+    return
+  }
+
+  const rows: PptxGenJS.TableRow[] = [
+    [hCell('組別'), hCell('工時'), hCell('平均時薪'), hCell('成本')],
+    [
+      dCell('資訊服務組', 0),
+      dCell(fmtH(cost.informationServiceHours), 0, false, 'center'),
+      dCell(fmtRate(cost.informationServiceRate), 0, false, 'center'),
+      dCell(fmtMoney(cost.informationServiceCost), 0, false, 'center'),
+    ],
+    [
+      dCell('前端開發課', 1),
+      dCell(fmtH(cost.frontendDevelopmentHours), 1, false, 'center'),
+      dCell(fmtRate(cost.frontendDevelopmentRate), 1, false, 'center'),
+      dCell(fmtMoney(cost.frontendDevelopmentCost), 1, false, 'center'),
+    ],
+    [
+      dCell('後端開發課', 2),
+      dCell(fmtH(cost.backendDevelopmentHours), 2, false, 'center'),
+      dCell(fmtRate(cost.backendDevelopmentRate), 2, false, 'center'),
+      dCell(fmtMoney(cost.backendDevelopmentCost), 2, false, 'center'),
+    ],
+    [
+      dCell('總計', 3, true),
+      dCell(fmtH(
+        cost.informationServiceHours + cost.frontendDevelopmentHours + cost.backendDevelopmentHours
+      ), 3, true, 'center'),
+      dCell('—', 3, true, 'center'),
+      dCell(fmtMoney(cost.totalCost), 3, true, 'center'),
+    ],
+  ]
+  slide.addTable(rows, {
+    x: box.x + 0.12,
+    y: box.y + 0.34,
+    w: box.w - 0.24,
+    h: 0.84,
+    colW: [1.4, 1.05, 1.45, Math.max(1.25, box.w - 4.14)],
+    border: PRES_TABLE_BORDER as PptxGenJS.BorderProps,
+    fontSize: 8.2,
+    fontFace: PRES_FONT,
+  })
+  const performanceValue = cost.calculationStatus === 'calculated' ? (cost.performance ?? 0) : null
+  slide.addText(assertPptText(`當期績效：${
+    cost.calculationStatus === 'calculated' ? fmtMoney(cost.performance) : '—'
+  }`, 'cost performance text'), {
+    x: box.x + 0.12,
+    y: box.y + 1.3,
+    w: box.w - 0.24,
+    h: 0.2,
+    fontFace: T.font.family,
+    fontSize: 10.2,
+    bold: true,
+    color: performanceValue === null
+      ? T.color.muted
+      : performanceValue > 0
+        ? T.color.positive
+        : performanceValue < 0
+          ? T.color.danger
+          : T.color.navy,
+    fit: 'shrink',
+  })
+}
+
+function addExecutiveProjectSlide(
   pptx: PptxGenJS,
-  content: ProjectImageSlide,
+  content: ExecutiveProjectSlide,
+  analysis: ReportAnalysisResult,
   pn: number,
   total: number,
   quarterLabel: string,
   period: string,
   imageRepo: ImageRepository
 ): Phase5Warning[] {
-  const slideWarnings: Phase5Warning[] = []
+  const warnings: Phase5Warning[] = []
   const slide = pptx.addSlide()
-  const L = PRES_LAYOUT
+  const T = PPT_THEME
+  const slideKind =
+    content.slideType === 'project-overview'
+      ? '主管整合摘要'
+      : content.slideType === 'project-detail'
+        ? '成果補充'
+        : '圖片展示'
 
-  const titleLabel = `[${content.mainItemNo}] ${content.projectName} ─ ${content.category}  (${content.projectPageIndex}/${content.projectTotalPages})`
-
-  slide.addText(titleLabel, {
-    x: L.padX, y: L.titleY, w: L.contentW, h: L.titleH,
-    fontSize: PRES_FONT_SIZE.sectionTitle, bold: true,
-    color: PRES_COLOR.titleText, fontFace: PRES_FONT,
+  addProjectHeader(slide, {
+    itemNo: content.itemNo,
+    projectCode: content.projectCode,
+    pm: content.pm,
+    projectName: content.projectName,
+    pageIndex: content.pageIndex,
+    pageCount: content.pageCount,
+    slideKind,
   })
 
-  const imgCount = content.filenames.length
-  const slots = getImageSlots(Math.min(imgCount, 4))
+  const kpiY = 0.98
+  if (content.overview) {
+    const s = content.overview.summary
+    const hoursUnmatched = s.workHoursStatus === 'unmatched'
+    const ratio = s.quarterScopeRatio
+    addKpiCard(slide, {
+      x: T.layout.marginX, y: kpiY, w: 2.15, h: 0.82,
+      label: '工時', value: hoursUnmatched ? '—' : fmtH(s.quarterHours),
+      caption: hoursUnmatched ? '工時資料尚未匹配' : `${s.peopleQuarter} 人`,
+      tone: s.workHoursStatus === 'unmatched' ? 'warning' : 'normal',
+    })
+    addKpiCard(slide, {
+      x: 2.72, y: kpiY, w: 2.15, h: 0.82,
+      label: '占比', value: ratio === null ? '—' : fmtPct2(ratio),
+      caption: '白名單專案',
+      tone: s.workHoursStatus === 'zero-hours' ? 'muted' : 'normal',
+    })
+    addKpiCard(slide, {
+      x: 5.08, y: kpiY, w: 2.15, h: 0.82,
+      label: '年度收入', value: fmtMoney(s.annualRevenue),
+      caption: '依 Excel 年度收入欄位',
+      tone: 'normal',
+    })
+    addKpiCard(slide, {
+      x: 7.44, y: kpiY, w: 2.15, h: 0.82,
+      label: '當期績效',
+      value: s.costBreakdown.calculationStatus === 'calculated'
+        ? fmtMoney(s.costBreakdown.performance)
+        : '—',
+      caption: costStatusCaption(s.costBreakdown.calculationStatus),
+      tone: s.costBreakdown.calculationStatus !== 'calculated'
+        ? 'muted'
+        : (s.costBreakdown.performance ?? 0) < 0
+          ? 'danger'
+          : 'positive',
+    })
+  }
 
-  for (let i = 0; i < Math.min(imgCount, 4); i++) {
-    const slot = slots[i]
-    const filename = content.filenames[i] ?? ''
-    const bKey = content.basenameKeys[i] ?? ''
+  const hasInlineImages = content.images.length > 0 && content.slideType !== 'project-gallery'
+  const textW = hasInlineImages ? 5.72 : T.layout.contentW
+  const contentStartY = content.overview ? 1.9 : 1.02
+  let curY = contentStartY
 
-    const dataUrl = getImageDataUrl(imageRepo, bKey, filename)
+  if (content.overview?.members && content.overview.members.length > 0) {
+    slide.addText(`成員：${content.overview.members.join('、')}`, {
+      x: T.layout.marginX,
+      y: 1.86,
+      w: hasInlineImages ? 5.72 : T.layout.contentW,
+      h: 0.16,
+      fontFace: T.font.family,
+      fontSize: 8.5,
+      color: T.color.muted,
+      fit: 'shrink',
+    })
+    curY = Math.max(curY, 2.12)
+  }
 
-    if (dataUrl) {
-      slide.addImage({
-        data: dataUrl,
-        x: slot.x, y: slot.y, w: slot.w, h: slot.h,
-        sizing: { type: 'contain', w: slot.w, h: slot.h },
+  for (const section of content.sections) {
+    const estimatedH = estimateContentCardHeight(section, textW)
+    const cardH = Math.min(estimatedH, Math.max(0.58, PROJECT_SAFE_BOTTOM_Y - curY))
+    if (curY + cardH > PROJECT_SAFE_BOTTOM_Y + 0.01) break
+    addContentCard(slide, {
+      x: T.layout.marginX,
+      y: curY,
+      w: textW,
+      h: cardH,
+      title: section.title,
+      body: section.text,
+      compact: content.sections.length > 4,
+    })
+    curY += cardH + PROJECT_BLOCK_GAP
+  }
+
+  if (content.overview) {
+    const costH = 1.56
+    if (curY + costH <= PROJECT_SAFE_BOTTOM_Y + 0.01) {
+      addCostTable(slide, content.overview.summary, {
+      x: T.layout.marginX,
+      y: curY,
+      w: textW,
+      h: costH,
       })
-    } else {
-      slideWarnings.push({
-        code: 'P5_IMAGE_NOT_FOUND',
-        message: `圖片 ${bKey || filename} 在資料庫中找不到，使用占位。`,
-        itemNo: content.mainItemNo,
-        filename: filename || bKey,
-      })
-      slide.addText(`（圖片未載入：${bKey || filename}）`, {
-        x: slot.x, y: slot.y, w: slot.w, h: slot.h,
-        fontSize: PRES_FONT_SIZE.caption,
-        color: PRES_COLOR.placeholderText,
-        fontFace: PRES_FONT,
-        fill: { color: PRES_COLOR.placeholderBg },
-        align: 'center',
-        valign: 'middle',
-      })
+      curY += costH + PROJECT_BLOCK_GAP
     }
   }
 
+  if (content.links.length > 0) {
+    const linkH = Math.min(0.6, Math.max(0.22, content.links.length * 0.16))
+    const linkY = Math.min(curY, PROJECT_SAFE_BOTTOM_Y - linkH)
+    addLinkRow(slide, {
+      x: T.layout.marginX,
+      y: linkY,
+      w: textW,
+      h: linkH,
+      links: content.links,
+    })
+  }
+
+  const slots = content.slideType === 'project-gallery'
+    ? getImageSlots(Math.min(content.images.length, 4))
+    : getInlineImageSlots(Math.min(content.images.length, 2))
+  content.images.slice(0, 4).forEach((image, index) => {
+    const slot = slots[index]
+    if (slot) {
+      addImageFrame(slide, {
+        x: slot.x,
+        y: slot.y,
+        w: slot.w,
+        h: slot.h,
+        title: image.category,
+      })
+      warnings.push(...addImageToSlot(
+        slide,
+        image,
+        { x: slot.x + 0.07, y: slot.y + 0.26, w: slot.w - 0.14, h: slot.h - 0.34 },
+        content.itemNo,
+        imageRepo
+      ))
+    }
+  })
+
   addFooter(slide, quarterLabel, period, pn, total)
-  return slideWarnings
+  return warnings
 }
 
 // ── 結尾摘要 ──────────────────────────────────────────────────────────────
@@ -631,7 +769,7 @@ function addClosingSlide(
     bold: true, color: PRES_COLOR.titleText, fontFace: PRES_FONT,
   })
   slide.addText(
-    `本份簡報共 ${total} 頁，涵蓋 ${analysis.projectGroups.length} 個主專案（${projectSlideCount} 頁專案成果）。`,
+    `本簡報共 ${total + 1} 張投影片，內頁 ${total} 頁；涵蓋 ${getPresentationProjectCount(analysis)} 個主專案（${projectSlideCount} 頁專案成果）。`,
     {
       x: L.padX, y: 2.7, w: L.contentW, h: 0.4,
       align: 'center', fontSize: PRES_FONT_SIZE.bodyText,
@@ -658,18 +796,12 @@ export async function buildTestPresentation(
 }
 
 /**
- * 產生完整版 PPT（9 + N 頁）。
+ * 產生完整版 PPT（主管版完整輸出）。
  *
  * 頁面架構：
  * 1. 封面（無頁碼/頁尾）
- * 2. 本期摘要
- * 3. 累計工時摘要
- * 4. 單季工時與人力
- * 5. 主專案工時排行
- * 6. 收入與績效
- * 7. 資料品質摘要
- * 8~N+7. 各主專案成果頁
- * N+8. 結尾摘要
+ * 2~. 工作成果說明核心分析頁（模組工時、人力占位、每月工時）
+ * 接續：各主專案成果頁、結尾
  *
  * @param input              PresentationInput（analysis + projectContent + images）
  * @param cumulativeChartBase64  累計圓餅圖 base64（null = 無資料）
@@ -682,16 +814,41 @@ export async function buildFullPresentation(
   quarterChartBase64: string | null,
   onProgress?: (step: Phase5ProgressStep) => void
 ): Promise<FullPresentationResult> {
+  void cumulativeChartBase64
+  void quarterChartBase64
+
+  // 阻擋規則：専案工時有數值但対応表對應後全為 0
+  if (input.analysis.dataQuality.projectMappingBlocked) {
+    throw new Error(
+      '專案工時尚未成功對應至專案內容，請確認專案對應表。無法產生完整版 PPT。'
+    )
+  }
+
   const warnings: Phase5Warning[] = []
 
   onProgress?.('preparing-content')
-  const pagination = buildProjectSlideContents(input.analysis, input.projectContent)
+  const pagination = buildExecutiveProjectSlides(
+    input.analysis,
+    input.projectContent,
+    input.hourlyRateSettings
+  )
   warnings.push(...pagination.warnings)
+  if (pagination.audit.lostContentCount > 0) {
+    throw new Error('Executive pagination 偵測到內容遺失，已停止產生完整版 PPT。')
+  }
 
   onProgress?.('processing-images')
   // Images are already in input.images (built before calling this function)
 
-  const totalSlides = TOTAL_FIXED_SLIDES + pagination.totalProjectSlides
+  const presentationCharts = input.presentationCharts
+  const moduleChartImages = presentationCharts?.moduleWorkHours
+    ?? (input.analysis.presentationAnalysis.presentationWorkHoursCharts
+      ?? input.analysis.presentationAnalysis.moduleWorkHoursCharts).map((chart) => ({
+      chart,
+      imageBase64: null,
+    }))
+  const fixedSlideCount = 1 + moduleChartImages.length + 2 + 1
+  const totalSlides = fixedSlideCount + pagination.totalProjectSlides
   const qConfig = QUARTER_CONFIG[input.analysis.quarter]
   const quarterLabel = qConfig.label
   const period = `${input.analysis.dateRanges.quarter.start} ～ ${input.analysis.dateRanges.quarter.end}`
@@ -706,45 +863,35 @@ export async function buildFullPresentation(
   // 1. 封面（無頁碼）
   addCoverSlide(pptx, input.analysis)
 
-  // 2. 本期摘要 → 頁碼 1
-  addExecutiveSummarySlide(pptx, input.analysis, 1, totalSlides - 1, quarterLabel, period)
+  let pageNum = 1
+  for (const chartImage of moduleChartImages) {
+    addModuleWorkHoursChartSlide(
+      pptx, chartImage, pageNum, totalSlides - 1, quarterLabel, period
+    )
+    pageNum++
+  }
 
-  // 3. 累計工時 → 頁碼 2
-  addWorkHoursSummarySlide(
-    pptx, '累計工時摘要', input.analysis, true,
-    cumulativeChartBase64, 2, totalSlides - 1, quarterLabel, period
+  addModuleWorkforcePlaceholderSlide(
+    pptx, input.analysis, presentationCharts?.moduleWorkforce ?? null,
+    pageNum, totalSlides - 1, quarterLabel, period
   )
+  pageNum++
 
-  // 4. 單季工時 → 頁碼 3
-  addWorkHoursSummarySlide(
-    pptx, '單季人力與工時占比', input.analysis, false,
-    quarterChartBase64, 3, totalSlides - 1, quarterLabel, period
+  addMonthlyWorkTypeSlide(
+    pptx, input.analysis, presentationCharts?.monthlyWorkType ?? null,
+    pageNum, totalSlides - 1, quarterLabel, period
   )
-
-  // 5. 排行 → 頁碼 4
-  addRankingSlide(pptx, input.analysis, 4, totalSlides - 1, quarterLabel, period)
-
-  // 6. 收入 → 頁碼 5
-  addRevenueSlide(pptx, input.analysis, 5, totalSlides - 1, quarterLabel, period)
-
-  // 7. 資料品質 → 頁碼 6
-  addDataQualitySlide(pptx, input.analysis, 6, totalSlides - 1, quarterLabel, period)
+  pageNum++
 
   onProgress?.('building-project-slides')
 
-  // 8~. 各主專案成果頁
-  let currentPage = 7
+  // 各主專案成果頁
+  let currentPage = pageNum
   for (const slideContent of pagination.slides) {
-    if (slideContent.type === 'text') {
-      addProjectTextSlide(
-        pptx, slideContent, currentPage, totalSlides - 1, quarterLabel, period
-      )
-    } else {
-      const imgWarnings = addProjectImageSlide(
-        pptx, slideContent, currentPage, totalSlides - 1, quarterLabel, period, input.images
-      )
-      warnings.push(...imgWarnings)
-    }
+    const slideWarnings = addExecutiveProjectSlide(
+      pptx, slideContent, input.analysis, currentPage, totalSlides - 1, quarterLabel, period, input.images
+    )
+    warnings.push(...slideWarnings)
     currentPage++
   }
 
@@ -770,6 +917,8 @@ export async function buildFullPresentation(
     projectGroupCount: pagination.totalProjectGroups,
     imageCount: pagination.totalImagesReferenced,
     warnings,
+    paginationAudit: pagination.audit,
+    projectPageCounts: pagination.perProjectPageCounts,
     generatedAt: new Date().toISOString(),
   }
 }

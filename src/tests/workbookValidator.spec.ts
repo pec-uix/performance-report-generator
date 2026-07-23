@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import * as XLSX from 'xlsx'
 import { validateWorkHoursWorkbook } from '@/services/workbookValidator'
-import { REQUIRED_WORK_SHEETS } from '@/config/requiredSheets'
+import { OPTIONAL_WORK_SHEETS, PIVOT_ANALYSIS_SHEETS, REQUIRED_WORK_SHEETS } from '@/config/requiredSheets'
 
 // ── 測試輔助 ──────────────────────────────────────────────────────
 // 直接建立 WorkBook 物件以避免 XLSX 中文工作表名稱序列化回傳問題
@@ -16,12 +16,38 @@ function makeWorkbook(sheetNames: string[]): XLSX.WorkBook {
 const ALL_REQUIRED = [...REQUIRED_WORK_SHEETS]
 
 describe('workbookValidator', () => {
-  it('五張必要工作表完整時 valid = true', () => {
+  it('四張核心必要工作表完整時 valid = true', () => {
     const wb = makeWorkbook(ALL_REQUIRED)
     const result = validateWorkHoursWorkbook(wb)
     expect(result.valid).toBe(true)
     expect(result.errors).toHaveLength(0)
     expect(result.missingSheets).toHaveLength(0)
+  })
+
+  it('缺少收入工時彙總不產生 error，列為 optional missing info', () => {
+    const wb = makeWorkbook(ALL_REQUIRED)
+    const result = validateWorkHoursWorkbook(wb)
+    expect(result.valid).toBe(true)
+    expect(result.errors).toHaveLength(0)
+    expect(result.missingSheets).not.toContain('收入工時彙總')
+    expect(result.info.some((i) => i.code === 'WH_OPTIONAL_SHEET_MISSING' && i.sheet === '收入工時彙總')).toBe(true)
+  })
+
+  it('收入工時彙總存在時仍可解析，但不是 required', () => {
+    const wb = makeWorkbook([...ALL_REQUIRED, ...OPTIONAL_WORK_SHEETS])
+    const result = validateWorkHoursWorkbook(wb)
+    expect(result.valid).toBe(true)
+    expect(result.parsedSheets['收入工時彙總']).toBeDefined()
+    expect(result.missingSheets).toHaveLength(0)
+  })
+
+  it('Pivot optional sheets 缺少不阻擋驗證', () => {
+    const wb = makeWorkbook(ALL_REQUIRED)
+    const result = validateWorkHoursWorkbook(wb)
+    expect(result.valid).toBe(true)
+    for (const sheet of PIVOT_ANALYSIS_SHEETS) {
+      expect(result.info.some((i) => i.code === 'WH_OPTIONAL_SHEET_MISSING' && i.sheet === sheet)).toBe(true)
+    }
   })
 
   it('缺少「工時分析(自助)」產生 WH_MISSING_SHEET error', () => {
@@ -31,6 +57,30 @@ describe('workbookValidator', () => {
     expect(result.valid).toBe(false)
     expect(result.errors.some((e) => e.code === 'WH_MISSING_SHEET')).toBe(true)
     expect(result.missingSheets).toContain('工時分析(自助)')
+  })
+
+  it('缺少「專案清單」仍產生 WH_MISSING_SHEET error', () => {
+    const sheets = ALL_REQUIRED.filter((s) => s !== '專案清單')
+    const wb = makeWorkbook(sheets)
+    const result = validateWorkHoursWorkbook(wb)
+    expect(result.valid).toBe(false)
+    expect(result.missingSheets).toContain('專案清單')
+  })
+
+  it('缺少「人員清單」仍產生 WH_MISSING_SHEET error', () => {
+    const sheets = ALL_REQUIRED.filter((s) => s !== '人員清單')
+    const wb = makeWorkbook(sheets)
+    const result = validateWorkHoursWorkbook(wb)
+    expect(result.valid).toBe(false)
+    expect(result.missingSheets).toContain('人員清單')
+  })
+
+  it('缺少「維運清單」仍產生 WH_MISSING_SHEET error', () => {
+    const sheets = ALL_REQUIRED.filter((s) => s !== '維運清單')
+    const wb = makeWorkbook(sheets)
+    const result = validateWorkHoursWorkbook(wb)
+    expect(result.valid).toBe(false)
+    expect(result.missingSheets).toContain('維運清單')
   })
 
   it('缺少多張必要工作表時全部列出', () => {

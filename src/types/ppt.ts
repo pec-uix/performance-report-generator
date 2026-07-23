@@ -89,6 +89,9 @@ export interface PptSlideData {
 
 import type { ReportAnalysisResult } from './reportAnalysis'
 import type { ProjectContentResult } from './project'
+import type { ModuleWorkHoursChartResult } from './presentationAnalysis'
+import type { HourlyRateSettings } from './projectCost'
+import type { ExecutivePaginationAudit } from '@/services/executiveProjectPaginationService'
 
 /**
  * 圖片資料庫：lowercase basename → Uint8Array
@@ -96,11 +99,24 @@ import type { ProjectContentResult } from './project'
  */
 export type ImageRepository = ReadonlyMap<string, Uint8Array>
 
+export interface PresentationChartImage {
+  chart: ModuleWorkHoursChartResult
+  imageBase64: string | null
+}
+
+export interface PresentationChartImages {
+  moduleWorkHours: PresentationChartImage[]
+  moduleWorkforce: string | null
+  monthlyWorkType: string | null
+}
+
 /** Phase 5 完整版簡報輸入 */
 export interface PresentationInput {
   analysis: ReportAnalysisResult
   projectContent: ProjectContentResult
   images: ImageRepository
+  presentationCharts?: PresentationChartImages
+  hourlyRateSettings?: HourlyRateSettings
 }
 
 /** Phase 5 非阻擋性警告 */
@@ -109,6 +125,11 @@ export interface Phase5Warning {
   message: string
   itemNo?: string
   filename?: string
+  mainItemNo?: string
+  sourceItemNo?: string
+  fieldName?: string
+  category?: string
+  reason?: string
 }
 
 /** Phase 5 產生進度步驟 */
@@ -127,6 +148,8 @@ export interface FullPresentationResult {
   projectGroupCount: number
   imageCount: number
   warnings: Phase5Warning[]
+  paginationAudit?: ExecutivePaginationAudit
+  projectPageCounts?: Record<string, number>
   /** ISO 8601 產生時間 */
   generatedAt: string
 }
