@@ -84,3 +84,49 @@ export interface PptSlideData {
   slide4Ranking: PptRankingSlideData
   slide5Detail: PptDetailSlideData
 }
+
+// ── Phase 5 型別 ─────────────────────────────────────────────────────────
+
+import type { ReportAnalysisResult } from './reportAnalysis'
+import type { ProjectContentResult } from './project'
+
+/**
+ * 圖片資料庫：lowercase basename → Uint8Array
+ * 在 Phase 5 使用 buildImageRepository 建立。
+ */
+export type ImageRepository = ReadonlyMap<string, Uint8Array>
+
+/** Phase 5 完整版簡報輸入 */
+export interface PresentationInput {
+  analysis: ReportAnalysisResult
+  projectContent: ProjectContentResult
+  images: ImageRepository
+}
+
+/** Phase 5 非阻擋性警告 */
+export interface Phase5Warning {
+  code: string
+  message: string
+  itemNo?: string
+  filename?: string
+}
+
+/** Phase 5 產生進度步驟 */
+export type Phase5ProgressStep =
+  | 'preparing-content'
+  | 'processing-images'
+  | 'building-summary-slides'
+  | 'building-project-slides'
+  | 'assembling-pptx'
+  | 'preparing-download'
+
+/** 完整版 PPT 產生結果 */
+export interface FullPresentationResult {
+  blob: Blob
+  totalSlides: number
+  projectGroupCount: number
+  imageCount: number
+  warnings: Phase5Warning[]
+  /** ISO 8601 產生時間 */
+  generatedAt: string
+}

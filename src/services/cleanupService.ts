@@ -153,3 +153,71 @@ export function clearPhase4Data(target: Phase4CleanupTarget): void {
     target.generateError.value = ''
   }
 }
+
+// ── Phase 5 ─────────────────────────────────────────────────────────
+
+import type { Phase5Warning, Phase5ProgressStep, FullPresentationResult } from '@/types/ppt'
+
+/**
+ * Phase 5 清除目標。
+ * 包含完整版 PPT Blob、圖片 Data URL、進度狀態、警告等。
+ * 不宣稱可強制垃圾回收，只移除參照。
+ */
+export interface Phase5CleanupTarget {
+  /** 完整版 PPT Blob（設為 null 以移除參照） */
+  fullPptBlob?: Ref<Blob | null>
+  /** 完整版 PPT 下載 Object URL（若尚未撤銷則在此撤銷） */
+  fullPptBlobUrl?: Ref<string>
+  /** 圖片 Data URL 清單（清除陣列移除參照，data: URL 不需 revoke） */
+  imageDataUrls?: Ref<string[]>
+  /** 是否正在產生完整版 */
+  isGeneratingFull?: Ref<boolean>
+  /** 完整版產生錯誤訊息 */
+  generateFullError?: Ref<string>
+  /** Phase 5 警告清單 */
+  phase5Warnings?: Ref<Phase5Warning[]>
+  /** 目前進度步驟 */
+  currentProgressStep?: Ref<Phase5ProgressStep | null>
+  /** 產生完成統計（設為 null 以移除參照） */
+  presentationStats?: Ref<FullPresentationResult | null>
+}
+
+/**
+ * 清除 Phase 5 產生狀態、Blob、Data URL 與 Object URL。
+ * - 撤銷 fullPptBlobUrl（Object URL）
+ * - 清除 imageDataUrls（data: URL 只需清空陣列）
+ * - 移除所有 Blob/Map 參照
+ * - 重設進度與錯誤狀態
+ * 不宣稱可強制垃圾回收。
+ */
+export function clearPhase5Data(target: Phase5CleanupTarget): void {
+  if (target.fullPptBlobUrl !== undefined && target.fullPptBlobUrl.value) {
+    try {
+      URL.revokeObjectURL(target.fullPptBlobUrl.value)
+    } catch {
+      // 忽略已失效的 URL
+    }
+    target.fullPptBlobUrl.value = ''
+  }
+  if (target.fullPptBlob !== undefined) {
+    target.fullPptBlob.value = null
+  }
+  if (target.imageDataUrls !== undefined) {
+    target.imageDataUrls.value = []
+  }
+  if (target.isGeneratingFull !== undefined) {
+    target.isGeneratingFull.value = false
+  }
+  if (target.generateFullError !== undefined) {
+    target.generateFullError.value = ''
+  }
+  if (target.phase5Warnings !== undefined) {
+    target.phase5Warnings.value = []
+  }
+  if (target.currentProgressStep !== undefined) {
+    target.currentProgressStep.value = null
+  }
+  if (target.presentationStats !== undefined) {
+    target.presentationStats.value = null
+  }
+}

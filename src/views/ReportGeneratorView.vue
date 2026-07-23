@@ -264,10 +264,13 @@
       <RevenueSummaryCard :revenue="analysisResult.revenue" />
       <DataQualitySummary :result="analysisResult" />
 
-      <!-- Phase 4：產生 PPT -->
+      <!-- Phase 4/5：產生 PPT -->
       <v-divider class="my-4" />
       <PptDownloadButton
         :result="analysisResult"
+        :project-content="validationResult?.projectContentResult"
+        :zip-file="imageZip.file"
+        :valid-images="validationResult?.zipResult?.images"
         @blob-ready="handlePptBlobReady"
       />
     </template>
@@ -295,7 +298,7 @@
   import { FILE_LIMITS } from '@/config/fileLimits'
   import type { QuarterKey } from '@/types/report'
   import type { ReportAnalysisResult } from '@/types/reportAnalysis'
-  import { clearAllData, clearPhase2Data, clearPhase3Data, clearPhase4Data, createEmptyFileState } from '@/services/cleanupService'
+  import { clearAllData, clearPhase2Data, clearPhase3Data, clearPhase4Data, clearPhase5Data, createEmptyFileState } from '@/services/cleanupService'
   import {
     runValidation,
     type ValidationState,
@@ -462,6 +465,7 @@
       pptBlobUrl,
       pptBlob,
     })
+    clearPhase5Data({})
     completedSteps.value = new Set()
     isValidating.value = false
     isAnalyzing.value = false
@@ -490,5 +494,6 @@
       pptBlobUrl,
       pptBlob,
     })
+    clearPhase5Data({})
   })
 </script>
