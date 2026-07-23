@@ -1,0 +1,42 @@
+# 依賴
+node_modules/
+dist/
+
+# 環境變數
+.env
+.env.*
+!.env.example
+
+# 使用者上傳的敏感檔案（絕對不提交）
+*.xlsx
+*.xls
+*.zip
+*.pptx
+*.ppt
+
+# 私密素材資料夾
+sample-data/private/
+private-assets/
+uploads/
+outputs/
+temp/
+
+# 圖片：公開 favicon/示意圖可加入，真實專案圖片放在 private-assets/
+# 若需提交測試用圖片，請改為 !public/favicon.svg 明確允許
+
+# 作業系統殘留
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 編輯器
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 覆蓋率報告
+coverage/
+
+# Vite 快取
+.vite/

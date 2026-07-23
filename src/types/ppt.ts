@@ -1,0 +1,86 @@
+/**
+ * ppt.ts
+ * Phase 4 PPT 簡報資料型別。
+ * 純資料型別，不依賴任何 DOM、ECharts 或 PptxGenJS。
+ */
+
+/** 封面頁資料 */
+export interface PptCoverData {
+  /** 季度標籤，例如「2026 S2」 */
+  quarterLabel: string
+  /** 單季期間，例如「2026-04-01 ～ 2026-07-31」 */
+  quarterPeriod: string
+  /** 累計期間，例如「2025-12-01 ～ 2026-07-31」 */
+  cumulativePeriod: string
+  /** 格式化製表時間，例如「2026-07-22 10:30」 */
+  calculatedAt: string
+}
+
+/** 工時摘要頁資料（累計與單季共用） */
+export interface PptWorkHoursSlideData {
+  /** 期間說明文字 */
+  periodLabel: string
+  totalHours: number
+  projectHours: number
+  maintenanceHours: number
+  otherHours: number
+  /** totalHours > 0 時為比率；否則 0 */
+  projectRatio: number
+  maintenanceRatio: number
+  otherRatio: number
+  activePeopleCount: number
+  /** activePeopleCount > 0 時有值；否則 null */
+  averageHoursPerPerson: number | null
+  /** null = totalHours === 0，不建立圓餅圖 */
+  chartBase64: string | null
+}
+
+/** 第 4 頁排行一列資料 */
+export interface PptRankingRowData {
+  rank: number
+  mainItemNo: string
+  projectName: string
+  quarterHours: number
+  cumulativeHours: number
+}
+
+/** 第 4 頁排行頁資料 */
+export interface PptRankingSlideData {
+  /** 單季期間說明文字 */
+  periodLabel: string
+  /** Top 5（依 quarterHours 由高到低，僅主專案群組） */
+  top5: PptRankingRowData[]
+}
+
+/** 第 5 頁專案群組一列資料 */
+export interface PptProjectGroupRowData {
+  mainItemNo: string
+  projectName: string
+  cumulativeHours: number
+  quarterHours: number
+  childCount: number
+  revenue: number | null
+}
+
+/** 第 5 頁群組明細頁資料 */
+export interface PptDetailSlideData {
+  /** 全部主專案群組數量（含未顯示） */
+  totalGroups: number
+  /** 實際顯示數量（最多 10） */
+  displayCount: number
+  /** 顯示的群組（依原始項次順序） */
+  groups: PptProjectGroupRowData[]
+  /** 是否有超過 10 個群組未顯示 */
+  hasMore: boolean
+  /** 未顯示的群組數量 */
+  remainingCount: number
+}
+
+/** 完整 PPT 簡報資料（傳入 assemblePptBlob 的純資料） */
+export interface PptSlideData {
+  slide1Cover: PptCoverData
+  slide2Cumulative: PptWorkHoursSlideData
+  slide3Quarter: PptWorkHoursSlideData
+  slide4Ranking: PptRankingSlideData
+  slide5Detail: PptDetailSlideData
+}

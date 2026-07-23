@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';"
+    />
+    <!--
+      CSP 說明：
+      GitHub Pages 以靜態方式服務，無法設定伺服器層級 HTTP 標頭（如 Content-Security-Policy）。
+      本 meta tag 可阻擋大多數的 XSS 攻擊，但部分瀏覽器對 meta CSP 有行為差異。
+      如需完整 CSP 保護，應搭配 GitHub Pages 自訂 domain 或使用支援 HTTP 標頭的 CDN（如 Cloudflare）。
+      
+      開發模式注意事項：
+      Vite dev server 使用 HMR WebSocket（ws://localhost:...），若需 HMR 在嚴格 CSP 下運作，
+      請在本機開發時暫時移除此 meta tag 或使用 vite.config.ts 的 server.headers 設定寬鬆版本。
+      正式環境（GitHub Pages）不會有 HMR，此 CSP 對正式環境完全適用。
+    -->
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <title>季度績效報告產生器</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

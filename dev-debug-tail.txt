@@ -1,0 +1,100 @@
+﻿      data: {
+        name: 'performance-report-generator',
+        version: '1.0.0',
+        private: true,
+        type: 'module',
+        scripts: {
+          dev: 'vite',
+          build: 'vue-tsc -p tsconfig.app.json --noEmit && vite build',
+          preview: 'vite preview',
+          lint: 'eslint . --ext .vue,.ts,.tsx --report-unused-disable-directives --max-warnings 0',
+          'lint:fix': 'eslint . --ext .vue,.ts,.tsx --fix',
+          format: 'prettier --write "src/**/*.{vue,ts,tsx}"',
+          test: 'vitest run',
+          'test:watch': 'vitest'
+        },
+        dependencies: {
+          '@mdi/font': '^7.4.47',
+          echarts: '^5.6.0',
+          jszip: '^3.10.1',
+          pptxgenjs: '^3.12.0',
+          'roboto-fontface': '^0.10.0',
+          vue: '^3.5.13',
+          vuetify: '^3.8.8',
+          xlsx: '^0.18.5'
+        },
+        devDependencies: {
+          '@types/jsdom': '^21.1.7',
+          '@typescript-eslint/eslint-plugin': '^8.32.1',
+          '@typescript-eslint/parser': '^8.32.1',
+          '@vitejs/plugin-vue': '^5.2.3',
+          '@vitest/coverage-v8': '^3.2.4',
+          eslint: '^8.57.1',
+          'eslint-plugin-vue': '^9.32.0',
+          jsdom: '^26.1.0',
+          prettier: '^3.5.3',
+          typescript: '^5.8.3',
+          vite: '^6.3.5',
+          'vite-plugin-vuetify': '^2.1.1',
+          vitest: '^3.2.4',
+          'vue-tsc': '^2.2.8'
+        }
+      },
+      hasSideEffects: [Function: hasSideEffects],
+      setResolvedCache: [Function: setResolvedCache],
+      getResolvedCache: [Function: getResolvedCache]
+    },
+    set: [Function (anonymous)]
+  },
+  worker: { format: 'iife', plugins: '() => plugins', rollupOptions: {} },
+  appType: 'spa',
+  experimental: { importGlobRestoreExtension: false, hmrPartialAccept: false },
+  future: undefined,
+  optimizeDeps: {
+    include: [],
+    exclude: [],
+    needsInterop: [],
+    extensions: [],
+    disabled: undefined,
+    holdUntilCrawlEnd: true,
+    force: false,
+    noDiscovery: false,
+    esbuildOptions: { preserveSymlinks: false }
+  },
+  dev: {
+    warmup: [],
+    sourcemap: { js: true },
+    sourcemapIgnoreList: [Function: isInNodeModules$1],
+    preTransformRequests: false,
+    createEnvironment: [Function: defaultCreateDevEnvironment],
+    recoverable: false,
+    moduleRunnerTransform: false
+  },
+  webSocketToken: 'YkniD-trJ7Zd',
+  getSortedPlugins: [Function: getSortedPlugins],
+  getSortedPluginHooks: [Function: getSortedPluginHooks],
+  createResolver: [Function: createResolver],
+  fsDenyGlob: [Function: arrayMatcher],
+  safeModulePaths: Set(0) {},
+  additionalAllowedHosts: [],
+  Symbol(vite:resolved-config): true
+}
+2026-07-21T06:36:01.762Z vite:deps (client) Hash is consistent. Skipping. Use --force to override.
+
+  [32m[1mVITE[22m v6.4.3[39m  [2mready in [0m[1m3356[22m[2m[0m ms[22m
+
+  [32m??[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+[2m  [32m??[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+[2m[32m  ??[39m[22m[2m  press [22m[1mh + enter[22m[2m to show help[22m
+2026-07-21T06:36:08.503Z vite:hmr [file change] [2mdev-debug-output.txt[22m
+2026-07-21T06:36:08.505Z vite:hmr (client) [no modules matched] [2mdev-debug-output.txt[22m
+2026-07-21T06:36:08.505Z vite:hmr (ssr) [no modules matched] [2mdev-debug-output.txt[22m
+2026-07-21T06:36:33.978Z vite:hmr [file change] [2mdev-debug-utf8.txt[22m
+2026-07-21T06:36:33.979Z vite:hmr (client) [no modules matched] [2mdev-debug-utf8.txt[22m
+2026-07-21T06:36:33.979Z vite:hmr (ssr) [no modules matched] [2mdev-debug-utf8.txt[22m
+2026-07-21T06:36:33.993Z vite:hmr [file change] [2mdev-debug-utf8.txt[22m
+2026-07-21T06:36:33.994Z vite:hmr (client) [no modules matched] [2mdev-debug-utf8.txt[22m
+2026-07-21T06:36:33.994Z vite:hmr (ssr) [no modules matched] [2mdev-debug-utf8.txt[22m
+2026-07-21T06:36:34.006Z vite:hmr [file change] [2mdev-debug-output.txt[22m
+2026-07-21T06:36:34.006Z vite:hmr (client) [no modules matched] [2mdev-debug-output.txt[22m
+2026-07-21T06:36:34.006Z vite:hmr (ssr) [no modules matched] [2mdev-debug-output.txt[22m

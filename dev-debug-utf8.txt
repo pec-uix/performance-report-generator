@@ -1,0 +1,60 @@
+﻿cmd : 檔案名稱、目錄名稱或磁碟區標籤語法錯誤。
+位於 線路:1 字元:1
++ cmd /c 'C:\Users\12040051\Desktop\績效報告網頁板\dev-debug.bat' > 'C:\Users\ ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (檔案名稱、目錄名稱或磁碟區標籤語法錯誤。:String) [],  
+   RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Starting Vite dev server with debug output...
+2026-07-21T06:36:01.221Z vite:config config file loaded in 926.20ms
+2026-07-21T06:36:01.240Z vite:env loading env files: [
+  'C:/Users/12040051/Desktop/蝮暹??勗?蝬脤???.env',
+  'C:/Users/12040051/Desktop/蝮暹??勗?蝬脤???.env.local',
+  'C:/Users/12040051/Desktop/蝮暹??勗?蝬脤???.env.development',
+  'C:/Users/12040051/Desktop/蝮暹??勗?蝬脤???.env.development.local'
+]
+2026-07-21T06:36:01.241Z vite:env env files loaded in 0.83ms
+2026-07-21T06:36:01.241Z vite:env using resolved env: {}
+2026-07-21T06:36:01.262Z vite:config using resolved config: {
+  base: '/',
+  plugins: [
+    'vite:optimized-deps',
+    'vite:watch-package-data',
+    'vite:pre-alias',
+    'alias',
+    'vite:modulepreload-polyfill',
+    'vite:resolve',
+    'vite:html-inline-proxy',
+    'vite:css',
+    'vite:esbuild',
+    'vite:json',
+    'vite:wasm-helper',
+    'vite:worker',
+    'vite:asset',
+    'vite:vue',
+    'vuetify:import',
+    'vite:wasm-fallback',
+    'vite:define',
+    'vite:css-post',
+    'vite:worker-import-meta-url',
+    'vite:asset-import-meta-url',
+    'vite:dynamic-import-vars',
+    'vite:import-glob',
+    'vite:client-inject',
+    'vite:css-analysis',
+    'vite:import-analysis'
+  ],
+  resolve: {
+    externalConditions: [ 'node' ],
+    extensions: [
+      '.mjs',  '.js',
+      '.mts',  '.ts',
+      '.jsx',  '.tsx',
+      '.json'
+    ],
+    dedupe: [ 'vue' ],
+    noExternal: [],
+    external: [],
+    preserveSymlinks: false,
+    alias: [
