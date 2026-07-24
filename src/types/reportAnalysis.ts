@@ -50,8 +50,11 @@ export interface ReportAnalysisResult {
   /** Phase 6A-5 PPT 成果頁白名單；整體分析仍使用完整工時資料 */
   presentationScope?: PresentationScope
 
-  /** Phase 6E 成本計算用：白名單主項三組織當季工時，不改成果頁主工時口徑 */
+  /** Phase 6E/6H 成本計算用：白名單項次三組織本期工時 */
   projectCostHoursByItemNo?: Record<string, ProjectOrganizationHours>
+
+  /** Phase 6H 成本計算用：白名單主項三組織累積期間工時 */
+  projectCostCumulativeHoursByItemNo?: Record<string, ProjectOrganizationHours>
 
   dataQuality: {
     invalidDateRows: number

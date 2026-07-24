@@ -329,13 +329,19 @@ export function addImageFrame(slide: PptxGenJS.Slide, options: ImageFrameOptions
   })
 }
 
+function makeLinkDisplayLabel(label: string, index: number, total: number): string {
+  const stripped = label.replace(/\s+\d+$/, '').trim()
+  if (!stripped) return total === 1 ? '開啟連結' : `連結 ${index + 1}`
+  return `查看 ${stripped}`
+}
+
 export function addLinkRow(slide: PptxGenJS.Slide, options: LinkRowOptions): void {
   if (options.links.length === 0) return
   const T = PPT_THEME
   const rowCount = Math.min(options.links.length, 4)
   const rowH = Math.max(0.13, options.h / rowCount)
   options.links.slice(0, 4).forEach((link, index) => {
-    slide.addText(options.links.length === 1 ? '開啟連結' : `連結 ${index + 1}`, {
+    slide.addText(makeLinkDisplayLabel(link.label, index, options.links.length), {
       x: options.x,
       y: options.y + index * rowH,
       w: options.w,

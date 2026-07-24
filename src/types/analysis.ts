@@ -19,8 +19,10 @@ export interface NormalizedWorkRecord {
   moduleKey?: string
   /** 模組顯示名稱，預設與 moduleKey 相同；空白時為 undefined */
   moduleName?: string
-  /** 工時分析 Excel「組織」欄；用於 Presentation 圖表口徑篩選 */
+  /** 工時分析 Excel「組織」欄原始值 */
   organization?: string
+  /** 以人員清單為準的組織（前端/後端/服務課）；若人員清單無此人則 fallback 至 organization */
+  canonicalOrganization?: string
   workCategory: WorkCategory
   projectKey?: string
   projectName?: string

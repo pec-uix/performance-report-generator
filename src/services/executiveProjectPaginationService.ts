@@ -45,7 +45,9 @@ export interface ExecutiveProjectOverview {
   ratio?: number
   annualRevenue?: number
   performance?: number
+  cumulativePerformance?: number
   costBreakdown: ProjectSummaryRow['costBreakdown']
+  cumulativeCostBreakdown: ProjectSummaryRow['cumulativeCostBreakdown']
   workStatus: ProjectSummaryRow['workHoursStatus']
   revenueDescription?: string
   summary: ProjectSummaryRow
@@ -203,7 +205,9 @@ function makeSlide(
           ratio: bundle.summary.quarterScopeRatio ?? undefined,
           annualRevenue: bundle.summary.annualRevenue ?? undefined,
           performance: bundle.summary.costBreakdown.performance,
+          cumulativePerformance: bundle.summary.cumulativeCostBreakdown.performance,
           costBreakdown: bundle.summary.costBreakdown,
+          cumulativeCostBreakdown: bundle.summary.cumulativeCostBreakdown,
           workStatus: bundle.summary.workHoursStatus,
           summary: bundle.summary,
         }
@@ -345,6 +349,13 @@ export function buildExecutiveProjectSlides(
           backendDevelopmentHours: 0,
           calculationStatus: 'missing-hourly-rates',
         },
+        cumulativeCostBreakdown: {
+          informationServiceHours: 0,
+          frontendDevelopmentHours: 0,
+          backendDevelopmentHours: 0,
+          calculationStatus: 'missing-hourly-rates',
+        },
+        financialDetails: [],
         workHoursStatus: 'matched' as const,
       },
       sections: [],

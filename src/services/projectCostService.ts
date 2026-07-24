@@ -46,25 +46,25 @@ export function buildProjectCostHoursByItemNo(
   const result: Record<string, ProjectOrganizationHours> = {}
   if (!scope) return result
 
-  const moduleToMainItemNo = new Map<string, string>()
+  const moduleToItemNo = new Map<string, string>()
   for (const item of scope.mainItems) {
     if (item.moduleKey && item.matchStatus !== 'unmatched') {
-      moduleToMainItemNo.set(item.moduleKey, item.itemNo)
+      moduleToItemNo.set(item.moduleKey, item.itemNo)
     }
   }
   for (const child of scope.childItems) {
-    if (child.moduleKey && child.parentItemNo && child.matchStatus !== 'unmatched') {
-      moduleToMainItemNo.set(child.moduleKey, child.parentItemNo)
+    if (child.moduleKey && child.matchStatus !== 'unmatched') {
+      moduleToItemNo.set(child.moduleKey, child.itemNo)
     }
   }
 
   for (const record of records) {
     const moduleKey = record.projectKey ?? record.maintenanceKey ?? record.moduleKey
     if (!moduleKey) continue
-    const mainItemNo = moduleToMainItemNo.get(moduleKey)
-    if (!mainItemNo) continue
-    result[mainItemNo] ??= makeEmptyHours()
-    addHours(result[mainItemNo], record.organization, record.hours)
+    const itemNo = moduleToItemNo.get(moduleKey)
+    if (!itemNo) continue
+    result[itemNo] ??= makeEmptyHours()
+    addHours(result[itemNo], record.canonicalOrganization ?? record.organization, record.hours)
   }
 
   return result

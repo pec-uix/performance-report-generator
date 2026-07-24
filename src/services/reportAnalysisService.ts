@@ -62,8 +62,10 @@ function countFrontendPeople(records: { department?: string; active?: boolean }[
   ).length
 }
 
-function filterFrontendRecords<T extends { organization?: string }>(records: T[]): T[] {
-  return records.filter((record) => record.organization === FRONTEND_ORGANIZATION)
+function filterFrontendRecords<T extends { organization?: string; canonicalOrganization?: string }>(records: T[]): T[] {
+  return records.filter(
+    (record) => (record.canonicalOrganization ?? record.organization) === FRONTEND_ORGANIZATION
+  )
 }
 
 function buildRevenueRecordsFromProjectMaster(
@@ -182,7 +184,16 @@ export function runAnalysis(
   )
   issues.push(...workRecordResult.issues)
 
-  const allRecords = workRecordResult.records
+  // 建立「員工識別鍵 → 人員清單組織」對照表；以人員清單為前後端分類依據
+  const employeeKeyToCanonicalOrg = new Map<string, string>()
+  for (const p of personResult.records) {
+    if (p.department) employeeKeyToCanonicalOrg.set(p.employeeKey, p.department)
+  }
+
+  const allRecords = workRecordResult.records.map((r) => ({
+    ...r,
+    canonicalOrganization: employeeKeyToCanonicalOrg.get(r.employeeKey) ?? r.organization,
+  }))
 
   // ── 4. 依日期過濾 ────────────────────────────────────────────
   const cumulativeRecords = filterRecordsByDateRange(allRecords, dateRanges.cumulative)
@@ -240,8 +251,13 @@ export function runAnalysis(
     hasPresentationScope ? scopedProjectItems : projectItems,
     effectiveModuleToItemNo
   )
+  // 成本同時保留本期與累積兩套 exact itemNo 工時；不得用累積值取代本期值。
   const projectCostHoursByItemNo = buildProjectCostHoursByItemNo(
     quarterRecords,
+    hasPresentationScope ? presentationScope : undefined
+  )
+  const projectCostCumulativeHoursByItemNo = buildProjectCostHoursByItemNo(
+    cumulativeRecords,
     hasPresentationScope ? presentationScope : undefined
   )
 
@@ -372,6 +388,7 @@ export function runAnalysis(
     presentationAnalysis,
     presentationScope: hasPresentationScope ? presentationScope : undefined,
     projectCostHoursByItemNo,
+    projectCostCumulativeHoursByItemNo,
     dataQuality: {
       invalidDateRows,
       invalidHourRows,

@@ -54,6 +54,8 @@ import { assertPptText } from './pptTextSafety'
 
 // ── 常數 ──────────────────────────────────────────────────────────────────
 
+const REVENUE_SECTION_TITLE = '專案收入'
+
 // ── 格式化輔助 ────────────────────────────────────────────────────────────
 
 function fmtH(hours: number): string {
@@ -78,10 +80,17 @@ function fmtRate(rate: number | undefined): string {
 }
 
 function costStatusCaption(status: string): string {
-  if (status === 'calculated') return '收入－三組織成本'
+  if (status === 'calculated') return '年度收入－截至本期累積費用'
   if (status === 'missing-revenue') return '年度收入尚未提供'
   if (status === 'unmatched-work-hours') return '工時未匹配'
   return '尚未設定平均時薪'
+}
+
+// PM 顯示：只取第一位（PPT 顯示層，不修改原始資料）
+function getPrimaryPmDisplayName(pm: string | undefined): string | undefined {
+  if (!pm?.trim()) return undefined
+  const first = pm.split(/[/／,，、]/)[0]?.trim()
+  return first || undefined
 }
 
 function getPresentationProjectCount(analysis: ReportAnalysisResult): number {
@@ -130,6 +139,27 @@ function dCell(
       color: PPT_THEME.color.text,
     },
   }
+}
+
+// 專案名稱欄：較大字體（最低 11pt），table cell 預設允許換行
+function nameCell(text: string, rowIdx: number, bold = false): PptxGenJS.TableCell {
+  return {
+    text: assertPptText(text, 'PPT project name cell'),
+    options: {
+      fill: { color: rowIdx % 2 === 0 ? PPT_THEME.color.surface2 : PPT_THEME.color.white },
+      fontSize: 11,
+      fontFace: PPT_THEME.font.family,
+      bold,
+      align: 'left',
+      color: PPT_THEME.color.text,
+    },
+  }
+}
+
+// 從 "CODE(名稱)" 格式提取純展示名稱；不影響內部 itemNo / projectCode
+function getDisplayProjectName(rawName: string): string {
+  const m = rawName.match(/^\d+\((.+)\)$/)
+  return m?.[1] ?? rawName
 }
 
 // ── 頁尾 ──────────────────────────────────────────────────────────────────
@@ -194,10 +224,16 @@ function getImageSlots(count: number): ImageSlot[] {
 
 function getInlineImageSlots(count: number): ImageSlot[] {
   const safeCount = Math.min(Math.max(count, 1), 2)
-  if (safeCount === 1) return [{ x: 6.25, y: 2.0, w: 3.15, h: 2.45 }]
+  const imgX = 5.76
+  const imgW = 3.88  // 9.64 right margin - imgX
+  const imgY = 1.9
+  const totalH = 3.0  // up to PROJECT_SAFE_BOTTOM_Y (4.9)
+  if (safeCount === 1) return [{ x: imgX, y: imgY, w: imgW, h: totalH }]
+  const gap = 0.08
+  const halfH = Math.round(((totalH - gap) / 2) * 100) / 100
   return [
-    { x: 6.15, y: 2.0, w: 1.6, h: 2.45 },
-    { x: 7.85, y: 2.0, w: 1.6, h: 2.45 },
+    { x: imgX, y: imgY, w: imgW, h: halfH },
+    { x: imgX, y: Math.round((imgY + halfH + gap) * 100) / 100, w: imgW, h: halfH },
   ]
 }
 
@@ -453,6 +489,8 @@ function addImageToSlot(
 
 const PROJECT_SAFE_BOTTOM_Y = 4.9
 const PROJECT_BLOCK_GAP = 0.12
+const MIN_INLINE_IMAGE_HEIGHT = 2.6  // minimum available height to render images on same slide
+const INLINE_IMAGE_GAP = 0.1        // gap between 2 side-by-side images
 
 function estimateTextHeight(text: string, fontSize: number, boxWidth: number, lineHeight = 1.25): number {
   const safeText = text.trim()
@@ -479,6 +517,41 @@ function estimateContentCardHeight(section: ExecutiveProjectSlide['sections'][nu
   )
 }
 
+function estimateCurYAfterText(content: ExecutiveProjectSlide): number {
+  const T = PPT_THEME
+  const textW = T.layout.contentW
+  // 成員在 KPI 上方（y=0.85）；KPI 在 y=1.05，h=0.9，之後 gap=0.12 → curY=2.07
+  let curY = content.overview ? 2.07 : 1.02
+  if (content.overview) {
+    const costH = 1.56
+    if (curY + costH <= PROJECT_SAFE_BOTTOM_Y + 0.01) {
+      curY += costH + PROJECT_BLOCK_GAP
+    }
+  }
+  const displaySections = content.sections.filter(
+    (s) => s.title !== REVENUE_SECTION_TITLE && s.text.trim() !== ''
+  )
+  for (const section of displaySections) {
+    const estimatedH = estimateContentCardHeight(section, textW)
+    const cardH = Math.min(estimatedH, Math.max(0.58, PROJECT_SAFE_BOTTOM_Y - curY))
+    if (curY + cardH > PROJECT_SAFE_BOTTOM_Y + 0.01) break
+    curY += cardH + PROJECT_BLOCK_GAP
+  }
+  if (content.links.length > 0) {
+    const linkH = Math.min(0.6, Math.max(0.22, content.links.length * 0.16))
+    const linkY = Math.min(curY, PROJECT_SAFE_BOTTOM_Y - linkH)
+    curY = Math.max(curY, linkY + linkH + PROJECT_BLOCK_GAP)
+  }
+  return curY
+}
+
+function slideNeedsOverflow(content: ExecutiveProjectSlide): boolean {
+  if (content.slideType === 'project-gallery') return false
+  const displayImages = content.images.filter((img) => img.category !== REVENUE_SECTION_TITLE)
+  if (displayImages.length === 0) return false
+  return (PROJECT_SAFE_BOTTOM_Y - estimateCurYAfterText(content)) < MIN_INLINE_IMAGE_HEIGHT
+}
+
 function addCostTable(
   slide: PptxGenJS.Slide,
   summary: NonNullable<ExecutiveProjectSlide['overview']>['summary'],
@@ -486,6 +559,8 @@ function addCostTable(
 ): void {
   const T = PPT_THEME
   const cost = summary.costBreakdown
+  const detailRows = summary.financialDetails ?? []
+  const hasGroupedDetails = detailRows.length > 1
   slide.addText('', {
     x: box.x,
     y: box.y,
@@ -506,6 +581,79 @@ function addCostTable(
     color: T.color.navy2,
     fit: 'shrink',
   })
+  if (hasGroupedDetails) {
+    // 欄位：專案名稱 | 工時 | 年度收入 | 資訊成本 | 前端成本 | 後端成本 | 總費用 | 累積績效
+    const tableW = box.w - 0.2
+    const nameColW = Math.max(1.0, Math.min(2.0, tableW * 0.22))
+    const fixedColsW = 0.65 + 0.9 + 0.78 + 0.78 + 0.78 + 0.78  // 工時+年度收入+3成本+總費用
+    const perfColW = Math.max(0.75, tableW - nameColW - fixedColsW)
+    const rows: PptxGenJS.TableRow[] = [
+      [
+        hCell('專案名稱'),
+        hCell('工時'),
+        hCell('年度收入'),
+        hCell('資訊成本'),
+        hCell('前端成本'),
+        hCell('後端成本'),
+        hCell('總費用'),
+        hCell('累積績效'),
+      ],
+      ...detailRows.map((row, idx) => {
+        const rowCost = row.costBreakdown
+        const cumulativeCost = row.cumulativeCostBreakdown
+        const isTotal = row.itemType === 'groupTotal'
+        return [
+          nameCell(getDisplayProjectName(row.projectName), idx, isTotal),
+          dCell(fmtH(
+            rowCost.informationServiceHours +
+              rowCost.frontendDevelopmentHours +
+              rowCost.backendDevelopmentHours
+          ), idx, isTotal, 'center'),
+          dCell(fmtMoney(row.annualRevenue), idx, isTotal, 'center'),
+          dCell(fmtMoney(rowCost.informationServiceCost), idx, isTotal, 'center'),
+          dCell(fmtMoney(rowCost.frontendDevelopmentCost), idx, isTotal, 'center'),
+          dCell(fmtMoney(rowCost.backendDevelopmentCost), idx, isTotal, 'center'),
+          dCell(fmtMoney(rowCost.totalCost), idx, isTotal, 'center'),
+          dCell(
+            cumulativeCost.calculationStatus === 'calculated' ? fmtMoney(cumulativeCost.performance) : '—',
+            idx,
+            isTotal,
+            'center'
+          ),
+        ]
+      }),
+    ]
+    const tableH = Math.min(box.h - 0.42, 0.28 + rows.length * 0.22)
+    slide.addTable(rows, {
+      x: box.x + 0.1,
+      y: box.y + 0.34,
+      w: tableW,
+      h: tableH,
+      colW: [nameColW, 0.65, 0.9, 0.78, 0.78, 0.78, 0.78, perfColW],
+      border: PRES_TABLE_BORDER as PptxGenJS.BorderProps,
+      fontSize: 9.2,
+      fontFace: PRES_FONT,
+    })
+    // 若有剩餘空間則顯示公式說明
+    const noteY = box.y + 0.34 + tableH + 0.03
+    const noteH = 0.13
+    if (noteY + noteH <= box.y + box.h - 0.01) {
+      slide.addText(
+        assertPptText('累積績效 = 年度收入 - 截至本期累積費用', 'cost formula note'),
+        {
+          x: box.x + 0.12,
+          y: noteY,
+          w: box.w - 0.24,
+          h: noteH,
+          fontFace: T.font.family,
+          fontSize: 8,
+          color: T.color.muted,
+          fit: 'shrink',
+        }
+      )
+    }
+    return
+  }
   if (cost.calculationStatus === 'missing-hourly-rates') {
     slide.addText(assertPptText('成本與績效尚未計算\n原因：平均時薪未完整設定', 'cost missing rate text'), {
       x: box.x + 0.12,
@@ -534,7 +682,7 @@ function addCostTable(
   }
 
   const rows: PptxGenJS.TableRow[] = [
-    [hCell('組別'), hCell('工時'), hCell('平均時薪'), hCell('成本')],
+    [hCell('組別'), hCell('本期工時'), hCell('平均時薪'), hCell('本期成本')],
     [
       dCell('資訊服務組', 0),
       dCell(fmtH(cost.informationServiceHours), 0, false, 'center'),
@@ -572,26 +720,80 @@ function addCostTable(
     fontSize: 8.2,
     fontFace: PRES_FONT,
   })
-  const performanceValue = cost.calculationStatus === 'calculated' ? (cost.performance ?? 0) : null
-  slide.addText(assertPptText(`當期績效：${
-    cost.calculationStatus === 'calculated' ? fmtMoney(cost.performance) : '—'
-  }`, 'cost performance text'), {
+  const cumulativeCost = summary.cumulativeCostBreakdown
+  const cumulativePerformance = cumulativeCost.calculationStatus === 'calculated'
+    ? (cumulativeCost.performance ?? 0)
+    : null
+  const summaryLines = [
+    `本期費用：${fmtMoney(cost.totalCost)}`,
+    `截至本期累積費用：${fmtMoney(cumulativeCost.totalCost)}`,
+    `截至本期累積績效：${cumulativeCost.calculationStatus === 'calculated' ? fmtMoney(cumulativeCost.performance) : '—'}`,
+  ]
+  slide.addText(assertPptText(summaryLines.join('\n'), 'cost cumulative summary text'), {
     x: box.x + 0.12,
     y: box.y + 1.3,
     w: box.w - 0.24,
-    h: 0.2,
+    h: 0.58,
     fontFace: T.font.family,
     fontSize: 10.2,
     bold: true,
-    color: performanceValue === null
+    color: cumulativePerformance === null
       ? T.color.muted
-      : performanceValue > 0
+      : cumulativePerformance > 0
         ? T.color.positive
-        : performanceValue < 0
+        : cumulativePerformance < 0
           ? T.color.danger
           : T.color.navy,
     fit: 'shrink',
   })
+}
+
+function addImageOverflowSlide(
+  pptx: PptxGenJS,
+  content: ExecutiveProjectSlide,
+  images: ExecutiveImagePlacement[],
+  pn: number,
+  total: number,
+  quarterLabel: string,
+  period: string,
+  imageRepo: ImageRepository
+): Phase5Warning[] {
+  const warnings: Phase5Warning[] = []
+  const slide = pptx.addSlide()
+  const T = PPT_THEME
+  addProjectHeader(slide, {
+    itemNo: content.itemNo,
+    projectCode: content.projectCode,
+    pm: getPrimaryPmDisplayName(content.pm),
+    projectName: content.projectName,
+    pageIndex: content.pageIndex,
+    pageCount: content.pageCount,
+    slideKind: '成果補充',
+  })
+  const imgY = 1.02
+  const imgH = PROJECT_SAFE_BOTTOM_Y - imgY
+  const imageW = T.layout.contentW
+  const gap = INLINE_IMAGE_GAP
+  if (images.length === 1) {
+    const slot = { x: T.layout.marginX, y: imgY, w: imageW, h: imgH }
+    addImageFrame(slide, { ...slot, title: images[0]!.category })
+    warnings.push(...addImageToSlot(
+      slide, images[0]!, { x: slot.x + 0.07, y: slot.y + 0.26, w: slot.w - 0.14, h: slot.h - 0.34 },
+      content.itemNo, imageRepo
+    ))
+  } else {
+    const eachW = (imageW - gap) / 2
+    images.slice(0, 2).forEach((image, idx) => {
+      const slot = { x: T.layout.marginX + idx * (eachW + gap), y: imgY, w: eachW, h: imgH }
+      addImageFrame(slide, { ...slot, title: image.category })
+      warnings.push(...addImageToSlot(
+        slide, image, { x: slot.x + 0.07, y: slot.y + 0.26, w: slot.w - 0.14, h: slot.h - 0.34 },
+        content.itemNo, imageRepo
+      ))
+    })
+  }
+  addFooter(slide, quarterLabel, period, pn, total)
+  return warnings
 }
 
 function addExecutiveProjectSlide(
@@ -603,7 +805,7 @@ function addExecutiveProjectSlide(
   quarterLabel: string,
   period: string,
   imageRepo: ImageRepository
-): Phase5Warning[] {
+): { warnings: Phase5Warning[]; overflowImages: ExecutiveImagePlacement[] } {
   const warnings: Phase5Warning[] = []
   const slide = pptx.addSlide()
   const T = PPT_THEME
@@ -617,71 +819,94 @@ function addExecutiveProjectSlide(
   addProjectHeader(slide, {
     itemNo: content.itemNo,
     projectCode: content.projectCode,
-    pm: content.pm,
+    pm: getPrimaryPmDisplayName(content.pm),
     projectName: content.projectName,
     pageIndex: content.pageIndex,
     pageCount: content.pageCount,
     slideKind,
   })
 
-  const kpiY = 0.98
-  if (content.overview) {
-    const s = content.overview.summary
-    const hoursUnmatched = s.workHoursStatus === 'unmatched'
-    const ratio = s.quarterScopeRatio
-    addKpiCard(slide, {
-      x: T.layout.marginX, y: kpiY, w: 2.15, h: 0.82,
-      label: '工時', value: hoursUnmatched ? '—' : fmtH(s.quarterHours),
-      caption: hoursUnmatched ? '工時資料尚未匹配' : `${s.peopleQuarter} 人`,
-      tone: s.workHoursStatus === 'unmatched' ? 'warning' : 'normal',
-    })
-    addKpiCard(slide, {
-      x: 2.72, y: kpiY, w: 2.15, h: 0.82,
-      label: '占比', value: ratio === null ? '—' : fmtPct2(ratio),
-      caption: '白名單專案',
-      tone: s.workHoursStatus === 'zero-hours' ? 'muted' : 'normal',
-    })
-    addKpiCard(slide, {
-      x: 5.08, y: kpiY, w: 2.15, h: 0.82,
-      label: '年度收入', value: fmtMoney(s.annualRevenue),
-      caption: '依 Excel 年度收入欄位',
-      tone: 'normal',
-    })
-    addKpiCard(slide, {
-      x: 7.44, y: kpiY, w: 2.15, h: 0.82,
-      label: '當期績效',
-      value: s.costBreakdown.calculationStatus === 'calculated'
-        ? fmtMoney(s.costBreakdown.performance)
-        : '—',
-      caption: costStatusCaption(s.costBreakdown.calculationStatus),
-      tone: s.costBreakdown.calculationStatus !== 'calculated'
-        ? 'muted'
-        : (s.costBreakdown.performance ?? 0) < 0
-          ? 'danger'
-          : 'positive',
-    })
-  }
-
-  const hasInlineImages = content.images.length > 0 && content.slideType !== 'project-gallery'
-  const textW = hasInlineImages ? 5.72 : T.layout.contentW
-  const contentStartY = content.overview ? 1.9 : 1.02
-  let curY = contentStartY
-
+  // ── 成員（在 KPI 上方，專案標題之後）────────────────────────────────────
   if (content.overview?.members && content.overview.members.length > 0) {
     slide.addText(`成員：${content.overview.members.join('、')}`, {
       x: T.layout.marginX,
-      y: 1.86,
-      w: hasInlineImages ? 5.72 : T.layout.contentW,
+      y: 0.85,
+      w: T.layout.contentW,
       h: 0.16,
       fontFace: T.font.family,
       fontSize: 8.5,
       color: T.color.muted,
       fit: 'shrink',
     })
-    curY = Math.max(curY, 2.12)
   }
 
-  for (const section of content.sections) {
+  // ── KPI 區（三張卡，成員之後）────────────────────────────────────────────
+  const kpiY = 1.05
+  const kpiH = 0.9
+  const kpiCardW = 3.0
+  const kpiGap = (T.layout.contentW - 3 * kpiCardW) / 2  // = 0.14
+  if (content.overview) {
+    const s = content.overview.summary
+    const hoursUnmatched = s.workHoursStatus === 'unmatched'
+    const ratio = s.quarterScopeRatio
+    const ratioStr = ratio === null ? '—' : fmtPct2(ratio)
+    // 卡 1：工時分析（含人數與占比）
+    addKpiCard(slide, {
+      x: T.layout.marginX, y: kpiY, w: kpiCardW, h: kpiH,
+      label: '工時分析',
+      value: hoursUnmatched ? '—' : fmtH(s.quarterHours),
+      caption: hoursUnmatched ? '工時資料尚未匹配' : `${s.peopleQuarter} 人｜占比 ${ratioStr}`,
+      tone: s.workHoursStatus === 'unmatched' ? 'warning' : 'normal',
+    })
+    // 卡 2：年度收入
+    addKpiCard(slide, {
+      x: T.layout.marginX + kpiCardW + kpiGap, y: kpiY, w: kpiCardW, h: kpiH,
+      label: '年度收入',
+      value: fmtMoney(s.annualRevenue),
+      caption: '依專案內容年度收入欄位',
+      tone: 'normal',
+    })
+    // 卡 3：截至本期累積績效
+    addKpiCard(slide, {
+      x: T.layout.marginX + 2 * (kpiCardW + kpiGap), y: kpiY, w: kpiCardW, h: kpiH,
+      label: '截至本期累積績效',
+      value: s.cumulativeCostBreakdown.calculationStatus === 'calculated'
+        ? fmtMoney(s.cumulativeCostBreakdown.performance)
+        : '—',
+      caption: costStatusCaption(s.cumulativeCostBreakdown.calculationStatus),
+      tone: s.cumulativeCostBreakdown.calculationStatus !== 'calculated'
+        ? 'muted'
+        : (s.cumulativeCostBreakdown.performance ?? 0) < 0
+          ? 'danger'
+          : 'positive',
+    })
+  }
+
+  // ── 內容區（KPI 之後：成本→文字區塊→連結→圖片）────────────────────────
+  const textW = T.layout.contentW  // 文字永遠全寬
+  // KPI 在 y=1.05，h=0.9，gap=0.12 → curY=2.07
+  const contentStartY = content.overview ? 2.07 : 1.02
+  let curY = contentStartY
+
+  // 成本分析（在文字區塊之前）
+  if (content.overview) {
+    const costH = 1.56
+    if (curY + costH <= PROJECT_SAFE_BOTTOM_Y + 0.01) {
+      addCostTable(slide, content.overview.summary, {
+        x: T.layout.marginX,
+        y: curY,
+        w: textW,
+        h: costH,
+      })
+      curY += costH + PROJECT_BLOCK_GAP
+    }
+  }
+
+  // 文字區塊（過濾空內容與專案收入）
+  const displaySections = content.sections.filter(
+    (s) => s.title !== REVENUE_SECTION_TITLE && s.text.trim() !== ''
+  )
+  for (const section of displaySections) {
     const estimatedH = estimateContentCardHeight(section, textW)
     const cardH = Math.min(estimatedH, Math.max(0.58, PROJECT_SAFE_BOTTOM_Y - curY))
     if (curY + cardH > PROJECT_SAFE_BOTTOM_Y + 0.01) break
@@ -692,24 +917,12 @@ function addExecutiveProjectSlide(
       h: cardH,
       title: section.title,
       body: section.text,
-      compact: content.sections.length > 4,
+      compact: displaySections.length > 4,
     })
     curY += cardH + PROJECT_BLOCK_GAP
   }
 
-  if (content.overview) {
-    const costH = 1.56
-    if (curY + costH <= PROJECT_SAFE_BOTTOM_Y + 0.01) {
-      addCostTable(slide, content.overview.summary, {
-      x: T.layout.marginX,
-      y: curY,
-      w: textW,
-      h: costH,
-      })
-      curY += costH + PROJECT_BLOCK_GAP
-    }
-  }
-
+  // 連結
   if (content.links.length > 0) {
     const linkH = Math.min(0.6, Math.max(0.22, content.links.length * 0.16))
     const linkY = Math.min(curY, PROJECT_SAFE_BOTTOM_Y - linkH)
@@ -720,33 +933,63 @@ function addExecutiveProjectSlide(
       h: linkH,
       links: content.links,
     })
+    curY = Math.max(curY, linkY + linkH + PROJECT_BLOCK_GAP)
   }
 
-  const slots = content.slideType === 'project-gallery'
-    ? getImageSlots(Math.min(content.images.length, 4))
-    : getInlineImageSlots(Math.min(content.images.length, 2))
-  content.images.slice(0, 4).forEach((image, index) => {
-    const slot = slots[index]
-    if (slot) {
-      addImageFrame(slide, {
-        x: slot.x,
-        y: slot.y,
-        w: slot.w,
-        h: slot.h,
-        title: image.category,
-      })
+  // 圖片
+  const displayImages = content.slideType !== 'project-gallery'
+    ? content.images.filter((img) => img.category !== REVENUE_SECTION_TITLE)
+    : content.images
+
+  if (content.slideType === 'project-gallery') {
+    const slots = getImageSlots(Math.min(displayImages.length, 4))
+    displayImages.slice(0, 4).forEach((image, index) => {
+      const slot = slots[index]
+      if (slot) {
+        addImageFrame(slide, { x: slot.x, y: slot.y, w: slot.w, h: slot.h, title: image.category })
+        warnings.push(...addImageToSlot(
+          slide, image,
+          { x: slot.x + 0.07, y: slot.y + 0.26, w: slot.w - 0.14, h: slot.h - 0.34 },
+          content.itemNo, imageRepo
+        ))
+      }
+    })
+    addFooter(slide, quarterLabel, period, pn, total)
+    return { warnings, overflowImages: [] }
+  }
+
+  // 非 gallery：圖片放在文字下方，空間不足則回傳 overflow
+  const availableH = PROJECT_SAFE_BOTTOM_Y - curY
+  if (displayImages.length > 0 && availableH >= MIN_INLINE_IMAGE_HEIGHT) {
+    const imgH = availableH
+    const imageW = T.layout.contentW
+    const gap = INLINE_IMAGE_GAP
+    if (displayImages.length === 1) {
+      const slot = { x: T.layout.marginX, y: curY, w: imageW, h: imgH }
+      addImageFrame(slide, { ...slot, title: displayImages[0]!.category })
       warnings.push(...addImageToSlot(
-        slide,
-        image,
+        slide, displayImages[0]!,
         { x: slot.x + 0.07, y: slot.y + 0.26, w: slot.w - 0.14, h: slot.h - 0.34 },
-        content.itemNo,
-        imageRepo
+        content.itemNo, imageRepo
       ))
+    } else {
+      const eachW = (imageW - gap) / 2
+      displayImages.slice(0, 2).forEach((image, idx) => {
+        const slot = { x: T.layout.marginX + idx * (eachW + gap), y: curY, w: eachW, h: imgH }
+        addImageFrame(slide, { ...slot, title: image.category })
+        warnings.push(...addImageToSlot(
+          slide, image,
+          { x: slot.x + 0.07, y: slot.y + 0.26, w: slot.w - 0.14, h: slot.h - 0.34 },
+          content.itemNo, imageRepo
+        ))
+      })
     }
-  })
+    addFooter(slide, quarterLabel, period, pn, total)
+    return { warnings, overflowImages: [] }
+  }
 
   addFooter(slide, quarterLabel, period, pn, total)
-  return warnings
+  return { warnings, overflowImages: displayImages.length > 0 ? [...displayImages] : [] }
 }
 
 // ── 結尾摘要 ──────────────────────────────────────────────────────────────
@@ -848,7 +1091,8 @@ export async function buildFullPresentation(
       imageBase64: null,
     }))
   const fixedSlideCount = 1 + moduleChartImages.length + 2 + 1
-  const totalSlides = fixedSlideCount + pagination.totalProjectSlides
+  const overflowSlideCount = pagination.slides.filter(slideNeedsOverflow).length
+  const totalSlides = fixedSlideCount + pagination.totalProjectSlides + overflowSlideCount
   const qConfig = QUARTER_CONFIG[input.analysis.quarter]
   const quarterLabel = qConfig.label
   const period = `${input.analysis.dateRanges.quarter.start} ～ ${input.analysis.dateRanges.quarter.end}`
@@ -888,11 +1132,18 @@ export async function buildFullPresentation(
   // 各主專案成果頁
   let currentPage = pageNum
   for (const slideContent of pagination.slides) {
-    const slideWarnings = addExecutiveProjectSlide(
+    const { warnings: slideWarnings, overflowImages } = addExecutiveProjectSlide(
       pptx, slideContent, input.analysis, currentPage, totalSlides - 1, quarterLabel, period, input.images
     )
     warnings.push(...slideWarnings)
     currentPage++
+    if (overflowImages.length > 0) {
+      const overflowWarnings = addImageOverflowSlide(
+        pptx, slideContent, overflowImages, currentPage, totalSlides - 1, quarterLabel, period, input.images
+      )
+      warnings.push(...overflowWarnings)
+      currentPage++
+    }
   }
 
   // 結尾 → 最後頁

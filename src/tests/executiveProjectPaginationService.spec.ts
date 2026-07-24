@@ -104,12 +104,33 @@ describe('executiveProjectPaginationService', () => {
   })
 
   it('收入說明與單張收入圖片合併於 overview', () => {
-    const result = buildExecutiveProjectSlides(
-      makeAnalysis([{ itemNo: '1' }]),
-      content([item('1', {
-        '專案收入_描述': '年度收入補充',
-      }, [{ column: '專案收入_圖片展示', filenames: ['income.png'] }])])
-    )
+    const contentItem = item('1', {
+      '專案收入_描述': '年度收入補充',
+      '專案收入_年度收入': 120000,
+    }, [{ column: '專案收入_圖片展示', filenames: ['income.png'] }])
+    const analysis = makeAnalysis([{ itemNo: '1' }])
+    analysis.presentationScope = {
+      items: [{
+        itemNo: '1',
+        itemType: 'main',
+        stableItemId: '20220000',
+        projectCode: '20220000',
+        projectName: '20220000(測試専案)',
+        sourceType: 'project',
+        moduleKey: '20220000(測試専案)',
+        sourceRow: 1,
+        content: contentItem,
+        matchStatus: 'exact',
+      }],
+      mainItems: [],
+      childItems: [],
+      orderedMainItemIds: ['1'],
+      allowedStableItemIds: new Set(['20220000']),
+      issues: [],
+    }
+    analysis.presentationScope.mainItems = analysis.presentationScope.items
+
+    const result = buildExecutiveProjectSlides(analysis, content([contentItem]))
 
     expect(result.totalProjectSlides).toBe(1)
     expect(result.slides[0]?.overview?.annualRevenue).toBe(120000)
@@ -200,6 +221,133 @@ describe('executiveProjectPaginationService', () => {
     expect(longChild.slides.every((slide) => slide.itemNo === '3')).toBe(true)
   })
 
+  it('主項與子項同頁保留各自財務明細，子項前端 0H 不被省略', () => {
+    const analysis = makeAnalysis([{ itemNo: '1', quarterHours: 120 }])
+    analysis.projectGroups[0]!.mainProject = {
+      ...analysis.projectGroups[0]!.mainProject,
+      itemNo: '1',
+      projectKey: '20220506(團購網&UNI團購網系統優化)',
+      projectName: '團購網&UNI團購網系統優化',
+      quarterHours: 120,
+      revenue: 1000000,
+    }
+    analysis.projectGroups[0]!.children = [{
+      itemNo: '1-1',
+      itemType: 'child',
+      projectKey: '202304119(UNI團購網系統維運)',
+      projectName: 'UNI團購網系統維運',
+      cumulativeHours: 0,
+      quarterHours: 0,
+      cumulativePeopleCount: 0,
+      quarterPeopleCount: 0,
+      revenue: 300000,
+    }]
+    analysis.projectGroups[0]!.cumulativeHours = 120
+    analysis.projectGroups[0]!.quarterHours = 120
+    analysis.projectCostHoursByItemNo = {
+      '1': {
+        informationServiceHours: 10,
+        frontendDevelopmentHours: 20,
+        backendDevelopmentHours: 30,
+      },
+      '1-1': {
+        informationServiceHours: 118,
+        frontendDevelopmentHours: 0,
+        backendDevelopmentHours: 175,
+      },
+    }
+    analysis.projectCostCumulativeHoursByItemNo = {
+      '1': {
+        informationServiceHours: 25,
+        frontendDevelopmentHours: 50,
+        backendDevelopmentHours: 75,
+      },
+      '1-1': {
+        informationServiceHours: 130,
+        frontendDevelopmentHours: 0,
+        backendDevelopmentHours: 200,
+      },
+    }
+    const mainContent = item('1', {
+      '專案名稱': '團購網&UNI團購網系統優化',
+      '專案收入_年度收入': 1000000,
+      '已完成工作事項_描述': '主項完成',
+    })
+    const childContent = item('1-1', {
+      '專案名稱': 'UNI團購網系統維運',
+      '專案收入_年度收入': 300000,
+      '已完成工作事項_描述': '子項完成',
+    })
+    analysis.presentationScope = {
+      items: [{
+        itemNo: '1',
+        itemType: 'main',
+        stableItemId: '20220506',
+        projectCode: '20220506',
+        projectName: '20220506(團購網&UNI團購網系統優化)',
+        sourceType: 'project',
+        moduleKey: '20220506(團購網&UNI團購網系統優化)',
+        sourceRow: 1,
+        content: mainContent,
+        matchStatus: 'exact',
+      }, {
+        itemNo: '1-1',
+        parentItemNo: '1',
+        itemType: 'child',
+        stableItemId: '202304119',
+        projectCode: '202304119',
+        projectName: '202304119(UNI團購網系統維運)',
+        sourceType: 'maintenance',
+        moduleKey: '202304119(UNI團購網系統維運)',
+        sourceRow: 2,
+        content: childContent,
+        matchStatus: 'exact',
+      }],
+      mainItems: [],
+      childItems: [],
+      orderedMainItemIds: ['1'],
+      allowedStableItemIds: new Set(['20220506', '202304119']),
+      issues: [],
+    }
+    analysis.presentationScope.mainItems = [analysis.presentationScope.items[0]!]
+    analysis.presentationScope.childItems = [analysis.presentationScope.items[1]!]
+
+    const result = buildExecutiveProjectSlides(
+      analysis,
+      content([mainContent, childContent]),
+      { informationService: 709, frontendDevelopment: 398, backendDevelopment: 433 }
+    )
+
+    const details = result.slides[0]!.overview!.summary.financialDetails
+    expect(details.map((row) => row.itemNo)).toEqual(['1', '1-1', '1 合計'])
+    expect(details[1]!.projectCode).toBe('202304119')
+    expect(details[1]!.annualRevenue).toBe(300000)
+    expect(details[1]!.costBreakdown.informationServiceHours).toBe(118)
+    expect(details[1]!.costBreakdown.frontendDevelopmentHours).toBe(0)
+    expect(details[1]!.costBreakdown.backendDevelopmentHours).toBe(175)
+    expect(details[1]!.workHoursStatus).toBe('matched')
+    expect(
+      details[1]!.costBreakdown.informationServiceHours +
+        details[1]!.costBreakdown.frontendDevelopmentHours +
+        details[1]!.costBreakdown.backendDevelopmentHours
+    ).toBe(293)
+    expect(details[1]!.costBreakdown.totalCost).toBe(159437)
+    expect(details[1]!.costBreakdown.performance).toBe(140563)
+    expect(details[1]!.cumulativeCostBreakdown.totalCost).toBe(178770)
+    expect(details[1]!.cumulativeCostBreakdown.performance).toBe(121230)
+    expect(details[2]!.costBreakdown.totalCost).toBe(
+      details[0]!.costBreakdown.totalCost! + details[1]!.costBreakdown.totalCost!
+    )
+    expect(details[2]!.cumulativeCostBreakdown.totalCost).toBe(
+      details[0]!.cumulativeCostBreakdown.totalCost! + details[1]!.cumulativeCostBreakdown.totalCost!
+    )
+    expect(result.slides[0]!.itemNo).toBe('1')
+    expect(result.slides[0]!.sections.some((section) =>
+      section.text.includes('主項完成') || section.text.includes('子項完成')
+    )).toBe(true)
+    expect(result.audit.lostContentCount).toBe(0)
+  })
+
   it('0 工時與未匹配項目原則 1 頁且狀態不同', () => {
     const zero = buildExecutiveProjectSlides(
       makeAnalysis([{ itemNo: '9', quarterHours: 0 }]),
@@ -248,5 +396,283 @@ describe('executiveProjectPaginationService', () => {
     expect(result.audit.inputImageCount).toBe(result.audit.outputImageCount)
     expect(result.audit.inputLinkCount).toBe(result.audit.outputLinkCount)
     expect(result.audit.lostContentCount).toBe(0)
+  })
+})
+
+// ── 年度收入唯一來源驗證（Phase 6J+）────────────────────────────────────────
+
+function makeScopeWithRevenue(
+  itemNo: string,
+  annualRevenue: number | undefined,
+  parentItemNo?: string
+): import('@/types/presentationScope').PresentationWhitelistItem {
+  return {
+    itemNo,
+    parentItemNo,
+    itemType: parentItemNo ? 'child' : 'main',
+    stableItemId: `CODE${itemNo}`,
+    projectCode: `CODE${itemNo}`,
+    projectName: `CODE${itemNo}(測試専案${itemNo})`,
+    sourceType: 'project',
+    moduleKey: `CODE${itemNo}(測試専案${itemNo})`,
+    sourceRow: 1,
+    content: item(itemNo, annualRevenue !== undefined ? { '專案收入_年度收入': annualRevenue } : {}),
+    matchStatus: 'exact',
+  }
+}
+
+function makeAnalysisWithScope(
+  groups: Array<{ itemNo: string; childItemNos?: string[]; quarterHours?: number }>,
+  revenueMap: Record<string, number | undefined>
+): ReportAnalysisResult {
+  const analysis = makeAnalysis(groups.map((g) => ({ itemNo: g.itemNo, quarterHours: g.quarterHours })))
+
+  const allItems: import('@/types/presentationScope').PresentationWhitelistItem[] = []
+  for (const group of groups) {
+    const mainScope = makeScopeWithRevenue(group.itemNo, revenueMap[group.itemNo])
+    allItems.push(mainScope)
+    for (const childNo of group.childItemNos ?? []) {
+      const childScope = makeScopeWithRevenue(childNo, revenueMap[childNo], group.itemNo)
+      allItems.push(childScope)
+    }
+    // Build child items for group
+    const children = (group.childItemNos ?? []).map((childNo) => ({
+      itemNo: childNo,
+      itemType: 'child' as const,
+      projectKey: `CODE${childNo}(子項${childNo})`,
+      projectName: `子項${childNo}`,
+      cumulativeHours: 0,
+      quarterHours: 0,
+      cumulativePeopleCount: 0,
+      quarterPeopleCount: 0,
+      revenue: null,
+    }))
+    analysis.projectGroups.find((g) => g.mainItemNo === group.itemNo)!.children = children
+  }
+
+  analysis.presentationScope = {
+    items: allItems,
+    mainItems: allItems.filter((i) => i.itemType === 'main'),
+    childItems: allItems.filter((i) => i.itemType === 'child'),
+    orderedMainItemIds: groups.map((g) => g.itemNo),
+    allowedStableItemIds: new Set(allItems.map((i) => i.stableItemId)),
+    issues: [],
+  }
+
+  return analysis
+}
+
+describe('年度收入唯一來源：専案内容.専案収入_年度収入', () => {
+  it('年度收入來自 専案内容.専案収入_年度収入，不使用 group.revenue 或 masterAnnualRevenue', () => {
+    const analysis = makeAnalysisWithScope([{ itemNo: '1' }], { '1': 1044000 })
+    // group.revenue 是不同來源（整體彙總），不得影響專案年度收入
+    analysis.projectGroups[0]!.revenue = 9999999
+
+    const result = buildExecutiveProjectSlides(analysis, content([
+      makeScopeWithRevenue('1', 1044000).content,
+    ]))
+    expect(result.slides[0]?.overview?.annualRevenue).toBe(1044000)
+  })
+
+  it('不再使用 専案清單.年度収入（group.mainProject.revenue）', () => {
+    const analysis = makeAnalysisWithScope([{ itemNo: '1' }], { '1': undefined })
+    // 即使 mainProject.revenue 有值，年度收入也應為 null
+    analysis.projectGroups[0]!.mainProject.revenue = 800000
+
+    const result = buildExecutiveProjectSlides(analysis, content([
+      makeScopeWithRevenue('1', undefined).content,
+    ]))
+    expect(result.slides[0]?.overview?.annualRevenue).toBeUndefined()
+  })
+
+  it('0 是有效收入，顯示為 0 而非缺值', () => {
+    const analysis = makeAnalysisWithScope([{ itemNo: '1' }], { '1': 0 })
+
+    const result = buildExecutiveProjectSlides(analysis, content([
+      makeScopeWithRevenue('1', 0).content,
+    ]))
+    expect(result.slides[0]?.overview?.annualRevenue).toBe(0)
+  })
+
+  it('0 年度收入仍參與績效計算（calculationStatus = calculated）', () => {
+    const analysis = makeAnalysisWithScope([{ itemNo: '1' }], { '1': 0 })
+    analysis.projectCostHoursByItemNo = {
+      '1': { informationServiceHours: 10, frontendDevelopmentHours: 20, backendDevelopmentHours: 5 },
+    }
+    analysis.projectCostCumulativeHoursByItemNo = analysis.projectCostHoursByItemNo
+
+    const result = buildExecutiveProjectSlides(
+      analysis,
+      content([makeScopeWithRevenue('1', 0).content]),
+      { informationService: 709, frontendDevelopment: 398, backendDevelopment: 433 }
+    )
+    const details = result.slides[0]!.overview!.summary.financialDetails
+    const mainRow = details.find((r) => r.itemNo === '1')!
+    expect(mainRow.annualRevenue).toBe(0)
+    expect(mainRow.cumulativeCostBreakdown.calculationStatus).toBe('calculated')
+    // 績效 = 0 - 費用 < 0
+    expect(mainRow.cumulativeCostBreakdown.performance).toBeLessThan(0)
+  })
+
+  it('専案収入_年度収入 空白時年度收入為 null（顯示 —，不 fallback）', () => {
+    const analysis = makeAnalysisWithScope([{ itemNo: '1' }], { '1': undefined })
+
+    const result = buildExecutiveProjectSlides(analysis, content([
+      makeScopeWithRevenue('1', undefined).content,
+    ]))
+    // overview.annualRevenue 使用 null ?? undefined = undefined
+    expect(result.slides[0]?.overview?.annualRevenue).toBeUndefined()
+    // financialDetails 中 annualRevenue = null
+    const details = result.slides[0]!.overview!.summary.financialDetails
+    if (details.length > 0) {
+      expect(details[0]!.annualRevenue).toBeNull()
+    }
+  })
+
+  it('主項使用自己的 専案収入_年度收入，不複製子項收入', () => {
+    const analysis = makeAnalysisWithScope(
+      [{ itemNo: '1', childItemNos: ['1-1'] }],
+      { '1': 1044000, '1-1': 300000 }
+    )
+    analysis.projectCostHoursByItemNo = {
+      '1': { informationServiceHours: 10, frontendDevelopmentHours: 20, backendDevelopmentHours: 5 },
+      '1-1': { informationServiceHours: 5, frontendDevelopmentHours: 10, backendDevelopmentHours: 2 },
+    }
+    analysis.projectCostCumulativeHoursByItemNo = analysis.projectCostHoursByItemNo
+
+    const result = buildExecutiveProjectSlides(
+      analysis,
+      content([
+        makeScopeWithRevenue('1', 1044000).content,
+        { ...makeScopeWithRevenue('1-1', 300000).content, parentItemNo: '1' },
+      ]),
+      { informationService: 709, frontendDevelopment: 398, backendDevelopment: 433 }
+    )
+
+    const details = result.slides[0]!.overview!.summary.financialDetails
+    const mainRow = details.find((r) => r.itemNo === '1')!
+    const childRow = details.find((r) => r.itemNo === '1-1')!
+    expect(mainRow.annualRevenue).toBe(1044000)
+    expect(childRow.annualRevenue).toBe(300000)
+  })
+
+  it('子項 0 不改用主項收入', () => {
+    const analysis = makeAnalysisWithScope(
+      [{ itemNo: '1', childItemNos: ['1-1'] }],
+      { '1': 1044000, '1-1': 0 }
+    )
+    analysis.projectCostHoursByItemNo = {
+      '1': { informationServiceHours: 10, frontendDevelopmentHours: 20, backendDevelopmentHours: 5 },
+      '1-1': { informationServiceHours: 0, frontendDevelopmentHours: 0, backendDevelopmentHours: 0 },
+    }
+    analysis.projectCostCumulativeHoursByItemNo = analysis.projectCostHoursByItemNo
+
+    const result = buildExecutiveProjectSlides(
+      analysis,
+      content([
+        makeScopeWithRevenue('1', 1044000).content,
+        { ...makeScopeWithRevenue('1-1', 0).content, parentItemNo: '1' },
+      ]),
+      { informationService: 709, frontendDevelopment: 398, backendDevelopment: 433 }
+    )
+
+    const details = result.slides[0]!.overview!.summary.financialDetails
+    const childRow = details.find((r) => r.itemNo === '1-1')!
+    // 子項 0 不得被替換為主項的 1044000
+    expect(childRow.annualRevenue).toBe(0)
+  })
+
+  it('群組年度收入等於主項＋子項加總（不重複計算主項）', () => {
+    const analysis = makeAnalysisWithScope(
+      [{ itemNo: '1', childItemNos: ['1-1'] }],
+      { '1': 1044000, '1-1': 0 }
+    )
+    analysis.projectCostHoursByItemNo = {
+      '1': { informationServiceHours: 10, frontendDevelopmentHours: 20, backendDevelopmentHours: 5 },
+      '1-1': { informationServiceHours: 0, frontendDevelopmentHours: 0, backendDevelopmentHours: 0 },
+    }
+    analysis.projectCostCumulativeHoursByItemNo = analysis.projectCostHoursByItemNo
+
+    const result = buildExecutiveProjectSlides(
+      analysis,
+      content([
+        makeScopeWithRevenue('1', 1044000).content,
+        { ...makeScopeWithRevenue('1-1', 0).content, parentItemNo: '1' },
+      ]),
+      { informationService: 709, frontendDevelopment: 398, backendDevelopment: 433 }
+    )
+
+    const details = result.slides[0]!.overview!.summary.financialDetails
+    const groupRow = details.find((r) => r.itemType === 'groupTotal')!
+    const mainRow = details.find((r) => r.itemNo === '1')!
+    const childRow = details.find((r) => r.itemNo === '1-1')!
+    // 群組年度收入 = 主項 1044000 + 子項 0 = 1044000（不重複加主項）
+    expect(groupRow.annualRevenue).toBe((mainRow.annualRevenue ?? 0) + (childRow.annualRevenue ?? 0))
+    expect(groupRow.annualRevenue).toBe(1044000)
+  })
+
+  it('部分收入缺值時群組年度收入為 null（incomplete 狀態）', () => {
+    const analysis = makeAnalysisWithScope(
+      [{ itemNo: '1', childItemNos: ['1-1'] }],
+      { '1': 1044000, '1-1': undefined }  // 子項無收入
+    )
+    analysis.projectCostHoursByItemNo = {
+      '1': { informationServiceHours: 10, frontendDevelopmentHours: 20, backendDevelopmentHours: 5 },
+      '1-1': { informationServiceHours: 5, frontendDevelopmentHours: 10, backendDevelopmentHours: 2 },
+    }
+    analysis.projectCostCumulativeHoursByItemNo = analysis.projectCostHoursByItemNo
+
+    const result = buildExecutiveProjectSlides(
+      analysis,
+      content([
+        makeScopeWithRevenue('1', 1044000).content,
+        { ...makeScopeWithRevenue('1-1', undefined).content, parentItemNo: '1' },
+      ]),
+      { informationService: 709, frontendDevelopment: 398, backendDevelopment: 433 }
+    )
+
+    const details = result.slides[0]!.overview!.summary.financialDetails
+    const mainRow = details.find((r) => r.itemNo === '1')!
+    const childRow = details.find((r) => r.itemNo === '1-1')!
+    const groupRow = details.find((r) => r.itemType === 'groupTotal')!
+    // 主項有收入，子項無收入
+    expect(mainRow.annualRevenue).toBe(1044000)
+    expect(childRow.annualRevenue).toBeNull()
+    // 群組合計標記為 incomplete（null）
+    expect(groupRow.annualRevenue).toBeNull()
+    // 群組累積績效因缺值而無法計算
+    expect(groupRow.cumulativeCostBreakdown.calculationStatus).toBe('missing-revenue')
+  })
+
+  it('整體収入摘要（revenue.cumulativeRevenue）不得覆蓋個別專案年度收入', () => {
+    const analysis = makeAnalysisWithScope([{ itemNo: '1' }], { '1': 500000 })
+    // 整體收入摘要使用不同數字
+    analysis.revenue = {
+      configured: true,
+      cumulativeRevenue: 22496000,
+      quarterRevenue: null,
+      revenuePerHour: null,
+      inputOutputRatio: null,
+      issues: [],
+    }
+
+    const result = buildExecutiveProjectSlides(analysis, content([
+      makeScopeWithRevenue('1', 500000).content,
+    ]))
+    // 個別專案年度收入應為 500000，不受整體收入 22496000 影響
+    expect(result.slides[0]?.overview?.annualRevenue).toBe(500000)
+  })
+
+  it('専案収入_描述文字不被解析為年度收入數字', () => {
+    const analysis = makeAnalysisWithScope([{ itemNo: '1' }], { '1': undefined })
+    // content 只有描述，沒有 専案収入_年度収入
+    const mainContent = item('1', {
+      '專案收入_描述': '合約金額：NT$1,500,000',
+    })
+    // 即使描述中含有數字，年度收入仍應為 null
+    analysis.presentationScope!.items[0]!.content = mainContent
+
+    const result = buildExecutiveProjectSlides(analysis, content([mainContent]))
+    expect(result.slides[0]?.overview?.annualRevenue).toBeUndefined()
   })
 })

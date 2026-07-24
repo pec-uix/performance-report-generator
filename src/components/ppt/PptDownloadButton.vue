@@ -4,7 +4,7 @@
       <v-card-title class="text-subtitle-2">專案成本與績效設定</v-card-title>
       <v-card-text>
         <div class="text-caption text-grey mb-3">
-          三個單位平均時薪皆填寫後，系統才會計算各專案成本、總費用及當期績效。
+          三個單位平均時薪皆填寫後，系統才會計算各專案成本、總費用及截至本期累積績效。
         </div>
         <v-row dense>
           <v-col cols="12" md="4">
@@ -60,7 +60,7 @@
             後端開發課 {{ formatRate(hourlyRateSettings.backendDevelopment) }}
           </div>
           <div v-else>
-            尚未啟用成本與績效計算；仍可下載 PPT，當期績效將顯示 —，成本區顯示成本與績效尚未計算。
+            尚未啟用成本與績效計算；仍可下載 PPT，截至本期累積績效將顯示 —，成本區顯示成本與績效尚未計算。
           </div>
         </v-alert>
       </v-card-text>

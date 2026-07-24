@@ -11,6 +11,7 @@ import type { ProjectContentResult, ProjectItem, ImageRef } from '@/types/projec
 import type { ReportAnalysisResult } from '@/types/reportAnalysis'
 import type { Phase5Warning } from '@/types/ppt'
 import type { HourlyRateSettings, ProjectCostBreakdown } from '@/types/projectCost'
+import type { PresentationWhitelistItem } from '@/types/presentationScope'
 import { estimateTextLines, paginateTextBlocks, sanitizeText } from './textPaginationService'
 import { PRES_IMAGE_PER_PAGE, PRES_TEXT_LAYOUT } from '@/config/presentationTheme'
 import { calculateProjectCostBreakdown } from './projectCostService'
@@ -111,7 +112,21 @@ export interface ProjectSummaryRow {
   revenue: number | null
   annualRevenue: number | null
   costBreakdown: ProjectCostBreakdown
+  cumulativeCostBreakdown: ProjectCostBreakdown
+  financialDetails: ProjectFinancialDetailRow[]
   workHoursStatus: 'matched' | 'zero-hours' | 'unmatched'
+}
+
+export interface ProjectFinancialDetailRow {
+  itemNo: string
+  itemType: 'main' | 'child' | 'groupTotal'
+  projectCode?: string
+  projectName: string
+  annualRevenue: number | null
+  quarterHours: number
+  workHoursStatus: ProjectSummaryRow['workHoursStatus']
+  costBreakdown: ProjectCostBreakdown
+  cumulativeCostBreakdown: ProjectCostBreakdown
 }
 
 export interface ProjectSummarySlide {
@@ -300,6 +315,168 @@ function extractProjectCode(text: string | undefined): string | undefined {
   return sanitizeText(text ?? '').match(/^(\d+)\(/)?.[1]
 }
 
+function resolveProjectCode(scopedItem: PresentationWhitelistItem | undefined): string | undefined {
+  return extractProjectCode(scopedItem?.projectName) ??
+    scopedItem?.projectCode ??
+    extractProjectCode(scopedItem?.moduleKey) ??
+    scopedItem?.stableItemId
+}
+
+function resolveAnnualRevenue(
+  item: PresentationWhitelistItem | undefined,
+): number | null {
+  // 唯一來源：專案內容.專案收入_年度收入
+  // undefined（欄位缺失或空白）→ null（顯示 —）
+  // null（無效格式）→ null（顯示 —）
+  // 0 → 0（有效收入，顯示 NT$0，仍參與績效計算）
+  // number → 該數值
+  return findDataMoney(item?.content, ['專案收入_年度收入']) ?? null
+}
+
+function resolveItemWorkHoursStatus(
+  scopedItem: PresentationWhitelistItem | undefined,
+  quarterHours: number,
+  costHoursTotal = 0
+): ProjectSummaryRow['workHoursStatus'] {
+  if (scopedItem && (scopedItem.matchStatus === 'unmatched' || !scopedItem.moduleKey)) {
+    return 'unmatched'
+  }
+  if (costHoursTotal > 0) return 'matched'
+  if (quarterHours === 0) return 'zero-hours'
+  return 'matched'
+}
+
+function getCostHoursTotal(
+  analysis: ReportAnalysisResult,
+  itemNo: string,
+  cumulative = false
+): number {
+  const hours = (cumulative
+    ? (analysis.projectCostCumulativeHoursByItemNo ?? analysis.projectCostHoursByItemNo)
+    : analysis.projectCostHoursByItemNo)?.[itemNo]
+  if (!hours) return 0
+  return hours.informationServiceHours + hours.frontendDevelopmentHours + hours.backendDevelopmentHours
+}
+
+function buildFinancialDetails(
+  analysis: ReportAnalysisResult,
+  group: ProjectGroupAnalysis,
+  hourlyRateSettings: HourlyRateSettings | undefined
+): ProjectFinancialDetailRow[] {
+  const scopedItems = analysis.presentationScope?.items ?? []
+  const rows: ProjectFinancialDetailRow[] = []
+  const projects = [group.mainProject, ...group.children]
+
+  for (const project of projects) {
+    const scopedItem = scopedItems.find((item) => item.itemNo === project.itemNo)
+    const annualRevenue = resolveAnnualRevenue(scopedItem)
+    const costHoursTotal = getCostHoursTotal(analysis, project.itemNo)
+    const cumulativeCostHoursTotal = getCostHoursTotal(analysis, project.itemNo, true)
+    const workHoursStatus = resolveItemWorkHoursStatus(scopedItem, project.quarterHours, costHoursTotal)
+    const cumulativeWorkHoursStatus = resolveItemWorkHoursStatus(
+      scopedItem,
+      project.cumulativeHours,
+      cumulativeCostHoursTotal
+    )
+    rows.push({
+      itemNo: project.itemNo,
+      itemType: project.itemType,
+      projectCode: resolveProjectCode(scopedItem) ?? project.projectKey,
+      projectName: project.projectName ?? scopedItem?.projectName ?? '（未命名專案）',
+      annualRevenue,
+      quarterHours: project.quarterHours,
+      workHoursStatus,
+      costBreakdown: calculateProjectCostBreakdown(
+        analysis.projectCostHoursByItemNo?.[project.itemNo],
+        annualRevenue,
+        workHoursStatus,
+        hourlyRateSettings
+      ),
+      cumulativeCostBreakdown: calculateProjectCostBreakdown(
+        analysis.projectCostCumulativeHoursByItemNo?.[project.itemNo] ??
+          analysis.projectCostHoursByItemNo?.[project.itemNo],
+        annualRevenue,
+        cumulativeWorkHoursStatus,
+        hourlyRateSettings
+      ),
+    })
+  }
+
+  if (rows.length > 1) {
+    const totalRevenue = rows.some((row) => row.annualRevenue === null)
+      ? null
+      : rows.reduce((sum, row) => sum + (row.annualRevenue ?? 0), 0)
+    const totalPeriodExpense = rows.reduce((sum, row) => sum + (row.costBreakdown.totalCost ?? 0), 0)
+    const totalCumulativeExpense = rows.reduce((sum, row) => sum + (row.cumulativeCostBreakdown.totalCost ?? 0), 0)
+    const hasCalculatedCost = rows.every(
+      (row) => row.costBreakdown.calculationStatus === 'calculated' ||
+        row.costBreakdown.calculationStatus === 'missing-revenue'
+    )
+    const hasCalculatedCumulativeCost = rows.every(
+      (row) => row.cumulativeCostBreakdown.calculationStatus === 'calculated' ||
+        row.cumulativeCostBreakdown.calculationStatus === 'missing-revenue'
+    )
+    const totalPeriodHours = (field: 'informationServiceHours' | 'frontendDevelopmentHours' | 'backendDevelopmentHours') =>
+      rows.reduce((sum, row) => sum + row.costBreakdown[field], 0)
+    const totalCumulativeHours = (field: 'informationServiceHours' | 'frontendDevelopmentHours' | 'backendDevelopmentHours') =>
+      rows.reduce((sum, row) => sum + row.cumulativeCostBreakdown[field], 0)
+    const totalPeriodCost = (field: 'informationServiceCost' | 'frontendDevelopmentCost' | 'backendDevelopmentCost') =>
+      rows.reduce((sum, row) => sum + (row.costBreakdown[field] ?? 0), 0)
+    const totalCumulativeCost = (field: 'informationServiceCost' | 'frontendDevelopmentCost' | 'backendDevelopmentCost') =>
+      rows.reduce((sum, row) => sum + (row.cumulativeCostBreakdown[field] ?? 0), 0)
+    rows.push({
+      itemNo: `${group.mainItemNo} 合計`,
+      itemType: 'groupTotal',
+      projectName: '群組合計',
+      annualRevenue: totalRevenue,
+      quarterHours: rows.reduce((sum, row) => sum + row.quarterHours, 0),
+      workHoursStatus: group.quarterHours === 0 ? 'zero-hours' : 'matched',
+      costBreakdown: {
+        informationServiceHours: totalPeriodHours('informationServiceHours'),
+        frontendDevelopmentHours: totalPeriodHours('frontendDevelopmentHours'),
+        backendDevelopmentHours: totalPeriodHours('backendDevelopmentHours'),
+        informationServiceRate: rows[0]?.costBreakdown.informationServiceRate,
+        informationServiceCost: hasCalculatedCost ? totalPeriodCost('informationServiceCost') : undefined,
+        frontendDevelopmentRate: rows[0]?.costBreakdown.frontendDevelopmentRate,
+        frontendDevelopmentCost: hasCalculatedCost ? totalPeriodCost('frontendDevelopmentCost') : undefined,
+        backendDevelopmentRate: rows[0]?.costBreakdown.backendDevelopmentRate,
+        backendDevelopmentCost: hasCalculatedCost ? totalPeriodCost('backendDevelopmentCost') : undefined,
+        totalCost: hasCalculatedCost ? totalPeriodExpense : undefined,
+        annualRevenue: totalRevenue ?? undefined,
+        performance: hasCalculatedCost && totalRevenue !== null ? totalRevenue - totalPeriodExpense : undefined,
+        calculationStatus: !hasCalculatedCost
+          ? 'missing-hourly-rates'
+          : totalRevenue === null
+            ? 'missing-revenue'
+            : 'calculated',
+      },
+      cumulativeCostBreakdown: {
+        informationServiceHours: totalCumulativeHours('informationServiceHours'),
+        frontendDevelopmentHours: totalCumulativeHours('frontendDevelopmentHours'),
+        backendDevelopmentHours: totalCumulativeHours('backendDevelopmentHours'),
+        informationServiceRate: rows[0]?.cumulativeCostBreakdown.informationServiceRate,
+        informationServiceCost: hasCalculatedCumulativeCost ? totalCumulativeCost('informationServiceCost') : undefined,
+        frontendDevelopmentRate: rows[0]?.cumulativeCostBreakdown.frontendDevelopmentRate,
+        frontendDevelopmentCost: hasCalculatedCumulativeCost ? totalCumulativeCost('frontendDevelopmentCost') : undefined,
+        backendDevelopmentRate: rows[0]?.cumulativeCostBreakdown.backendDevelopmentRate,
+        backendDevelopmentCost: hasCalculatedCumulativeCost ? totalCumulativeCost('backendDevelopmentCost') : undefined,
+        totalCost: hasCalculatedCumulativeCost ? totalCumulativeExpense : undefined,
+        annualRevenue: totalRevenue ?? undefined,
+        performance: hasCalculatedCumulativeCost && totalRevenue !== null
+          ? totalRevenue - totalCumulativeExpense
+          : undefined,
+        calculationStatus: !hasCalculatedCumulativeCost
+          ? 'missing-hourly-rates'
+          : totalRevenue === null
+            ? 'missing-revenue'
+            : 'calculated',
+      },
+    })
+  }
+
+  return rows
+}
+
 function buildSummaryRow(
   analysis: ReportAnalysisResult,
   group: ProjectGroupAnalysis,
@@ -308,19 +485,10 @@ function buildSummaryRow(
 ): ProjectSummaryRow {
   const scopedMain = analysis.presentationScope?.mainItems.find((item) => item.itemNo === group.mainItemNo)
   const content = scopedMain?.content
-  const contentAnnualRevenue = findDataMoney(content, ['專案收入_年度收入'])
-  const annualRevenue = contentAnnualRevenue !== undefined
-    ? contentAnnualRevenue
-    : scopedMain?.masterAnnualRevenue !== undefined
-      ? scopedMain.masterAnnualRevenue
-      : group.revenue
+  const annualRevenue = resolveAnnualRevenue(scopedMain)
   const contentPm = findDataString(content, ['PM'])
   const contentMembers = findDataString(content, ['專案成員', '成員'])
-  const projectCode =
-    extractProjectCode(scopedMain?.projectName) ??
-    scopedMain?.projectCode ??
-    extractProjectCode(scopedMain?.moduleKey) ??
-    scopedMain?.stableItemId
+  const projectCode = resolveProjectCode(scopedMain)
   const scopeQuarterTotal =
     analysis.presentationAnalysis.presentationScopeAnalysis?.quarterTotalHours ??
     analysis.quarterSummary.workHours.totalHours
@@ -348,6 +516,18 @@ function buildSummaryRow(
       workHoursStatus,
       hourlyRateSettings
     ),
+    cumulativeCostBreakdown: calculateProjectCostBreakdown(
+      analysis.projectCostCumulativeHoursByItemNo?.[group.mainItemNo] ??
+        analysis.projectCostHoursByItemNo?.[group.mainItemNo],
+      resolvedAnnualRevenue,
+      resolveItemWorkHoursStatus(
+        scopedMain,
+        group.cumulativeHours,
+        getCostHoursTotal(analysis, group.mainItemNo, true)
+      ),
+      hourlyRateSettings
+    ),
+    financialDetails: buildFinancialDetails(analysis, group, hourlyRateSettings),
     workHoursStatus,
   }
 }
@@ -362,6 +542,7 @@ function resolveWorkHoursStatus(
   if (scopedMain && (scopedMain.matchStatus === 'unmatched' || !scopedMain.moduleKey)) {
     return 'unmatched'
   }
+  if (getCostHoursTotal(analysis, group.mainItemNo) > 0) return 'matched'
   if (group.quarterHours === 0) return 'zero-hours'
   return 'matched'
 }

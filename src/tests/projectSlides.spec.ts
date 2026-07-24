@@ -251,13 +251,12 @@ describe('projectSlides', () => {
     expect(allText.some((t) => t.includes('PROJECT CODE'))).toBe(true)
   })
 
-  it('圖片版型：1 張圖的尺寸大於 2 張圖中的單張尺寸', async () => {
+  it('圖片版型（Phase 6I）：1 張圖全寬顯示，兩張圖並排顯示（相同 y，不同 x，各自夠寬）', async () => {
     const analysis1 = makeAnalysis([{ mainItemNo: '1.0' }])
     const pc1 = makeProjectContentWithImages('1.0', ['img1.png'])
     const repo1 = makeImageRepo(['img1.png'])
     slideCallHistory.length = 0
     await buildFullPresentation({ analysis: analysis1, projectContent: pc1, images: repo1 }, null, null)
-    // addImage(opts) 單一物件參數，calls[0][0] 是 opts
     const calls1 = slideCallHistory.flatMap((s) => s.addImage.mock.calls)
     const oneImgW = (calls1[0]?.[0] as { w?: number } | undefined)?.w ?? 0
 
@@ -268,10 +267,19 @@ describe('projectSlides', () => {
     await buildFullPresentation({ analysis: analysis2, projectContent: pc2, images: repo2 }, null, null)
     const calls2 = slideCallHistory.flatMap((s) => s.addImage.mock.calls)
     const twoImgActualW = (calls2[0]?.[0] as { w?: number } | undefined)?.w ?? 0
+    const twoImgY0 = (calls2[0]?.[0] as { y?: number } | undefined)?.y ?? 0
+    const twoImgY1 = (calls2[1]?.[0] as { y?: number } | undefined)?.y ?? 0
+    const twoImgX0 = (calls2[0]?.[0] as { x?: number } | undefined)?.x ?? 0
+    const twoImgX1 = (calls2[1]?.[0] as { x?: number } | undefined)?.x ?? 0
 
-    expect(oneImgW).toBeGreaterThan(twoImgActualW)
+    // 1 張圖全寬顯示（≥ 8"）
+    expect(oneImgW).toBeGreaterThan(8.0)
     expect(calls2).toHaveLength(2)
-    expect(twoImgActualW).toBeGreaterThan(0)
+    // 2 張圖並排（相同 y，不同 x）
+    expect(twoImgY0).toBe(twoImgY1)
+    expect(twoImgX1).toBeGreaterThan(twoImgX0)
+    // 每張圖夠寬（≥ 3.5"）
+    expect(twoImgActualW).toBeGreaterThan(3.5)
   })
 
   it('投影片標題標示專案名稱，且不把 itemNo 當 PROJECT CODE', async () => {
@@ -314,8 +322,8 @@ describe('projectSlides', () => {
     expect(allTextCalls.some((t) => t.includes('執行成果'))).toBe(true)
     expect(allTextCalls.some((t) => t.includes('UIX 說明'))).toBe(true)
     expect(allTextCalls.some((t) => t.includes('一般成果'))).toBe(true)
-    expect(allTextCalls.some((t) => t.includes('連結 1'))).toBe(true)
-    expect(allTextCalls.some((t) => t.includes('連結 2'))).toBe(true)
+    expect(allTextCalls.some((t) => t.includes('查看 UIX執行成果'))).toBe(true)
+    expect(allTextCalls.some((t) => t.includes('查看 執行成果'))).toBe(true)
   })
 
   it('中文檔名與大小寫差異依 basename lowercase 規則嵌入', async () => {
