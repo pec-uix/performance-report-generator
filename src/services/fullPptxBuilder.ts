@@ -545,6 +545,7 @@ function addCostTable(
 ): void {
   const T = PPT_THEME
   const cost = summary.costBreakdown
+  const cumulativeCostSummary = summary.cumulativeCostBreakdown
   const detailRows = summary.financialDetails ?? []
   const hasGroupedDetails = detailRows.length > 1
   slide.addText('', {
@@ -576,7 +577,7 @@ function addCostTable(
     const rows: PptxGenJS.TableRow[] = [
       [
         hCell('專案名稱'),
-        hCell('工時'),
+        hCell('累計工時'),
         hCell('年度收入'),
         hCell('資訊成本'),
         hCell('前端成本'),
@@ -585,21 +586,20 @@ function addCostTable(
         hCell('累積績效'),
       ],
       ...detailRows.map((row, idx) => {
-        const rowCost = row.costBreakdown
         const cumulativeCost = row.cumulativeCostBreakdown
         const isTotal = row.itemType === 'groupTotal'
         return [
           nameCell(getDisplayProjectName(row.projectName), idx, isTotal),
           dCell(fmtH(
-            rowCost.informationServiceHours +
-              rowCost.frontendDevelopmentHours +
-              rowCost.backendDevelopmentHours
+            cumulativeCost.informationServiceHours +
+              cumulativeCost.frontendDevelopmentHours +
+              cumulativeCost.backendDevelopmentHours
           ), idx, isTotal, 'center'),
           dCell(fmtMoney(row.annualRevenue), idx, isTotal, 'center'),
-          dCell(fmtMoney(rowCost.informationServiceCost), idx, isTotal, 'center'),
-          dCell(fmtMoney(rowCost.frontendDevelopmentCost), idx, isTotal, 'center'),
-          dCell(fmtMoney(rowCost.backendDevelopmentCost), idx, isTotal, 'center'),
-          dCell(fmtMoney(rowCost.totalCost), idx, isTotal, 'center'),
+          dCell(fmtMoney(cumulativeCost.informationServiceCost), idx, isTotal, 'center'),
+          dCell(fmtMoney(cumulativeCost.frontendDevelopmentCost), idx, isTotal, 'center'),
+          dCell(fmtMoney(cumulativeCost.backendDevelopmentCost), idx, isTotal, 'center'),
+          dCell(fmtMoney(cumulativeCost.totalCost), idx, isTotal, 'center'),
           dCell(
             cumulativeCost.calculationStatus === 'calculated' ? fmtMoney(cumulativeCost.performance) : '—',
             idx,
@@ -668,32 +668,32 @@ function addCostTable(
   }
 
   const rows: PptxGenJS.TableRow[] = [
-    [hCell('組別'), hCell('本期工時'), hCell('平均時薪'), hCell('本期成本')],
+    [hCell('組別'), hCell('累計工時'), hCell('平均時薪'), hCell('累計成本')],
     [
       dCell('資訊服務組', 0),
-      dCell(fmtH(cost.informationServiceHours), 0, false, 'center'),
-      dCell(fmtRate(cost.informationServiceRate), 0, false, 'center'),
-      dCell(fmtMoney(cost.informationServiceCost), 0, false, 'center'),
+      dCell(fmtH(cumulativeCostSummary.informationServiceHours), 0, false, 'center'),
+      dCell(fmtRate(cumulativeCostSummary.informationServiceRate), 0, false, 'center'),
+      dCell(fmtMoney(cumulativeCostSummary.informationServiceCost), 0, false, 'center'),
     ],
     [
       dCell('前端開發課', 1),
-      dCell(fmtH(cost.frontendDevelopmentHours), 1, false, 'center'),
-      dCell(fmtRate(cost.frontendDevelopmentRate), 1, false, 'center'),
-      dCell(fmtMoney(cost.frontendDevelopmentCost), 1, false, 'center'),
+      dCell(fmtH(cumulativeCostSummary.frontendDevelopmentHours), 1, false, 'center'),
+      dCell(fmtRate(cumulativeCostSummary.frontendDevelopmentRate), 1, false, 'center'),
+      dCell(fmtMoney(cumulativeCostSummary.frontendDevelopmentCost), 1, false, 'center'),
     ],
     [
       dCell('後端開發課', 2),
-      dCell(fmtH(cost.backendDevelopmentHours), 2, false, 'center'),
-      dCell(fmtRate(cost.backendDevelopmentRate), 2, false, 'center'),
-      dCell(fmtMoney(cost.backendDevelopmentCost), 2, false, 'center'),
+      dCell(fmtH(cumulativeCostSummary.backendDevelopmentHours), 2, false, 'center'),
+      dCell(fmtRate(cumulativeCostSummary.backendDevelopmentRate), 2, false, 'center'),
+      dCell(fmtMoney(cumulativeCostSummary.backendDevelopmentCost), 2, false, 'center'),
     ],
     [
       dCell('總計', 3, true),
       dCell(fmtH(
-        cost.informationServiceHours + cost.frontendDevelopmentHours + cost.backendDevelopmentHours
+        cumulativeCostSummary.informationServiceHours + cumulativeCostSummary.frontendDevelopmentHours + cumulativeCostSummary.backendDevelopmentHours
       ), 3, true, 'center'),
       dCell('—', 3, true, 'center'),
-      dCell(fmtMoney(cost.totalCost), 3, true, 'center'),
+      dCell(fmtMoney(cumulativeCostSummary.totalCost), 3, true, 'center'),
     ],
   ]
   slide.addTable(rows, {
@@ -706,12 +706,11 @@ function addCostTable(
     fontSize: 8.2,
     fontFace: PRES_FONT,
   })
-  const cumulativeCost = summary.cumulativeCostBreakdown
+  const cumulativeCost = cumulativeCostSummary
   const cumulativePerformance = cumulativeCost.calculationStatus === 'calculated'
     ? (cumulativeCost.performance ?? 0)
     : null
   const summaryLines = [
-    `本期費用：${fmtMoney(cost.totalCost)}`,
     `截至本期累積費用：${fmtMoney(cumulativeCost.totalCost)}`,
     `截至本期累積績效：${cumulativeCost.calculationStatus === 'calculated' ? fmtMoney(cumulativeCost.performance) : '—'}`,
   ]

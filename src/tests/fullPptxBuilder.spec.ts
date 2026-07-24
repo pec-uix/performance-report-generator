@@ -726,7 +726,7 @@ describe('fullPptxBuilder', () => {
 
       const costTable = tables.find((rows) =>
         rows[0]?.map((cell) => typeof cell === 'object' && 'text' in cell ? cell.text : '').join('|') ===
-          '組別|本期工時|平均時薪|本期成本'
+          '組別|累計工時|平均時薪|累計成本'
       )
       expect(costTable).toBeTruthy()
       expect(costTable?.map((row) => row[0]).map((cell) =>
