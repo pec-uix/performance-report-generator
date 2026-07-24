@@ -222,20 +222,6 @@ function getImageSlots(count: number): ImageSlot[] {
   ]
 }
 
-function getInlineImageSlots(count: number): ImageSlot[] {
-  const safeCount = Math.min(Math.max(count, 1), 2)
-  const imgX = 5.76
-  const imgW = 3.88  // 9.64 right margin - imgX
-  const imgY = 1.9
-  const totalH = 3.0  // up to PROJECT_SAFE_BOTTOM_Y (4.9)
-  if (safeCount === 1) return [{ x: imgX, y: imgY, w: imgW, h: totalH }]
-  const gap = 0.08
-  const halfH = Math.round(((totalH - gap) / 2) * 100) / 100
-  return [
-    { x: imgX, y: imgY, w: imgW, h: halfH },
-    { x: imgX, y: Math.round((imgY + halfH + gap) * 100) / 100, w: imgW, h: halfH },
-  ]
-}
 
 // ── 封面 ──────────────────────────────────────────────────────────────────
 
