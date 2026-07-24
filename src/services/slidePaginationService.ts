@@ -408,14 +408,14 @@ function buildFinancialDetails(
       : rows.reduce((sum, row) => sum + (row.annualRevenue ?? 0), 0)
     const totalPeriodExpense = rows.reduce((sum, row) => sum + (row.costBreakdown.totalCost ?? 0), 0)
     const totalCumulativeExpense = rows.reduce((sum, row) => sum + (row.cumulativeCostBreakdown.totalCost ?? 0), 0)
+    const isCountableStatus = (s: string) =>
+      s === 'calculated' || s === 'missing-revenue' || s === 'unmatched-work-hours'
     const hasCalculatedCost = rows.every(
-      (row) => row.costBreakdown.calculationStatus === 'calculated' ||
-        row.costBreakdown.calculationStatus === 'missing-revenue'
-    )
+      (row) => isCountableStatus(row.costBreakdown.calculationStatus)
+    ) && rows.some((row) => row.costBreakdown.calculationStatus === 'calculated' || row.costBreakdown.calculationStatus === 'missing-revenue')
     const hasCalculatedCumulativeCost = rows.every(
-      (row) => row.cumulativeCostBreakdown.calculationStatus === 'calculated' ||
-        row.cumulativeCostBreakdown.calculationStatus === 'missing-revenue'
-    )
+      (row) => isCountableStatus(row.cumulativeCostBreakdown.calculationStatus)
+    ) && rows.some((row) => row.cumulativeCostBreakdown.calculationStatus === 'calculated' || row.cumulativeCostBreakdown.calculationStatus === 'missing-revenue')
     const totalPeriodHours = (field: 'informationServiceHours' | 'frontendDevelopmentHours' | 'backendDevelopmentHours') =>
       rows.reduce((sum, row) => sum + row.costBreakdown[field], 0)
     const totalCumulativeHours = (field: 'informationServiceHours' | 'frontendDevelopmentHours' | 'backendDevelopmentHours') =>
