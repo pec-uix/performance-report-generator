@@ -516,18 +516,24 @@ function buildSummaryRow(
       workHoursStatus,
       hourlyRateSettings
     ),
-    cumulativeCostBreakdown: calculateProjectCostBreakdown(
-      analysis.projectCostCumulativeHoursByItemNo?.[group.mainItemNo] ??
-        analysis.projectCostHoursByItemNo?.[group.mainItemNo],
-      resolvedAnnualRevenue,
-      resolveItemWorkHoursStatus(
-        scopedMain,
-        group.cumulativeHours,
-        getCostHoursTotal(analysis, group.mainItemNo, true)
-      ),
-      hourlyRateSettings
-    ),
     financialDetails: buildFinancialDetails(analysis, group, hourlyRateSettings),
+    // 截至本期累積績效：有子項時用群組合計，否則用主項自身
+    get cumulativeCostBreakdown() {
+      const details = this.financialDetails
+      const groupTotal = details?.find((r) => r.itemType === 'groupTotal')
+      if (groupTotal) return groupTotal.cumulativeCostBreakdown
+      return calculateProjectCostBreakdown(
+        analysis.projectCostCumulativeHoursByItemNo?.[group.mainItemNo] ??
+          analysis.projectCostHoursByItemNo?.[group.mainItemNo],
+        resolvedAnnualRevenue,
+        resolveItemWorkHoursStatus(
+          scopedMain,
+          group.cumulativeHours,
+          getCostHoursTotal(analysis, group.mainItemNo, true)
+        ),
+        hourlyRateSettings
+      )
+    },
     workHoursStatus,
   }
 }
