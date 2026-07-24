@@ -74,14 +74,29 @@ function buildRevenueRecordsFromProjectMaster(
   const revenueRecords: RevenueRecord[] = []
   let hasRevenueField = false
 
+  const hasAnnualField = records.some((r) => r.annualRevenue !== undefined)
+
+  if (!hasAnnualField) {
+    return {
+      records: [],
+      revenueFieldFound: false,
+      issues: [{
+        code: 'REVENUE_PROJECT_MASTER_FIELD_MISSING',
+        severity: 'info',
+        source: 'revenue-record',
+        message: '缺少「收入工時彙總」工作表，且「專案清單」未提供「年度收入」欄位，收入績效摘要顯示為「尚未設定」。',
+      }],
+    }
+  }
+
   for (const record of records) {
-    if (record.projectRevenue === undefined) continue
+    if (record.annualRevenue === undefined) continue
     hasRevenueField = true
     revenueRecords.push({
       projectKey: record.projectKey,
       itemNo: record.itemNo,
-      revenueAmount: record.projectRevenue,
-      revenueType: '專案清單.收入',
+      revenueAmount: record.annualRevenue,
+      revenueType: '專案清單.年度收入',
     })
   }
 
@@ -93,7 +108,7 @@ function buildRevenueRecordsFromProjectMaster(
         code: 'REVENUE_PROJECT_MASTER_FALLBACK',
         severity: 'info',
         source: 'revenue-record',
-        message: '缺少「收入工時彙總」工作表，整體收入摘要改用「專案清單.收入」欄位 fallback。',
+        message: '缺少「收入工時彙總」工作表，整體收入摘要改用「專案清單.年度收入」欄位 fallback。',
       }],
     }
   }
@@ -105,7 +120,7 @@ function buildRevenueRecordsFromProjectMaster(
       code: 'REVENUE_PROJECT_MASTER_FIELD_MISSING',
       severity: 'info',
       source: 'revenue-record',
-      message: '缺少「收入工時彙總」工作表，且「專案清單」未提供收入欄位，收入績效摘要顯示為「尚未設定」。',
+      message: '缺少「收入工時彙總」工作表，且「專案清單」未提供「年度收入」欄位，收入績效摘要顯示為「尚未設定」。',
     }],
   }
 }

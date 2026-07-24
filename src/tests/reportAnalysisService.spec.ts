@@ -193,7 +193,32 @@ describe('runAnalysis', () => {
     expect(result.revenue.sourceLabel).toBe('收入工時彙總')
   })
 
-  it('缺少收入工時彙總時，整體收入摘要使用專案清單.收入 fallback', () => {
+  it('缺少收入工時彙總時，有年度收入欄才 configured=true', () => {
+    const state = makePassedValidationState()
+    const workbookResult = state.workbookResult
+    if (!workbookResult) throw new Error('missing workbook')
+    delete workbookResult.parsedSheets['收入工時彙總']
+    workbookResult.detectedSheets = workbookResult.detectedSheets.filter(
+      (sheet) => sheet !== '收入工時彙總'
+    )
+    workbookResult.parsedSheets['專案清單'] = {
+      originalName: '專案清單',
+      normalizedName: '專案清單',
+      headers: ['項次', '專案代碼', '專案名稱', '收入', '年度收入'],
+      rowCount: 2,
+      rows: [
+        ['1', 'PRJ-001', '測試專案一', 5000, 1000],
+        ['2', 'PRJ-002', '測試專案二', 2000, 0],
+      ],
+    }
+
+    const result = runAnalysis(state, 'S2')
+    expect(result.revenue.configured).toBe(true)
+    expect(result.revenue.cumulativeRevenue).toBe(1000)
+    expect(result.issues.some((issue) => issue.code === 'REVENUE_PROJECT_MASTER_FALLBACK')).toBe(true)
+  })
+
+  it('缺少收入工時彙總且無年度收入欄時 configured=false', () => {
     const state = makePassedValidationState()
     const workbookResult = state.workbookResult
     if (!workbookResult) throw new Error('missing workbook')
@@ -213,10 +238,7 @@ describe('runAnalysis', () => {
     }
 
     const result = runAnalysis(state, 'S2')
-    expect(result.revenue.configured).toBe(true)
-    expect(result.revenue.cumulativeRevenue).toBe(1000)
-    expect(result.revenue.sourceLabel).toBe('專案清單收入欄位（fallback）')
-    expect(result.issues.some((issue) => issue.code === 'REVENUE_PROJECT_MASTER_FALLBACK')).toBe(true)
+    expect(result.revenue.configured).toBe(false)
   })
 
   it('dataQuality 包含 invalidDateRows 等欄位', () => {
