@@ -538,8 +538,8 @@ export function buildModuleWorkforceOption(
         label: {
           show: true,
           position: 'right',
-          formatter: (params: { name?: string; value?: number }) =>
-            `${params.name ?? ''}, ${formatCompactNumber(params.value ?? 0, 2)}`,
+          formatter: (params: { value?: number }) =>
+            formatCompactNumber(params.value ?? 0, 2),
           color: '#1F2937',
           fontSize: 11,
         },

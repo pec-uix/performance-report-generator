@@ -346,7 +346,7 @@ function addModuleWorkforcePlaceholderSlide(
   pptx: PptxGenJS,
   analysis: ReportAnalysisResult,
   chartBase64: string | null,
-  quarterChartBase64: string | null,
+  periodLabel: '累計' | '當季',
   pn: number,
   total: number,
   quarterLabel: string,
@@ -360,23 +360,13 @@ function addModuleWorkforcePlaceholderSlide(
     subtitle: '前端開發課白名單專案人力投入',
   })
 
-  const hasBothCharts = chartBase64 && quarterChartBase64
-  if (hasBothCharts) {
-    // 累計標籤
-    slide.addText('累計', {
+  if (chartBase64) {
+    slide.addText(periodLabel, {
       x: L.padX, y: 1.02, w: L.contentW, h: 0.22,
       fontSize: PRES_FONT_SIZE.caption, fontFace: PRES_FONT, bold: true, color: PRES_COLOR.subtitleText,
     })
-    slide.addImage({ data: chartBase64, x: L.padX, y: 1.26, w: L.contentW, h: 1.82 })
-    // 當季標籤
-    slide.addText('當季', {
-      x: L.padX, y: 3.13, w: L.contentW, h: 0.22,
-      fontSize: PRES_FONT_SIZE.caption, fontFace: PRES_FONT, bold: true, color: PRES_COLOR.subtitleText,
-    })
-    slide.addImage({ data: quarterChartBase64, x: L.padX, y: 3.37, w: L.contentW, h: 1.82 })
-  } else if (chartBase64) {
-    slide.addImage({ data: chartBase64, x: L.padX, y: 1.05, w: L.contentW, h: 4.05 })
-  } else if (analysis.presentationAnalysis.workforceConfigured) {
+    slide.addImage({ data: chartBase64, x: L.padX, y: 1.26, w: L.contentW, h: 3.82 })
+  } else if (periodLabel === '累計' && analysis.presentationAnalysis.workforceConfigured) {
     const modules = analysis.presentationAnalysis.presentationScopeAnalysis?.moduleWorkforce ??
       analysis.presentationAnalysis.moduleWorkforce
     const rows: PptxGenJS.TableRow[] = [
@@ -1095,7 +1085,8 @@ export async function buildFullPresentation(
       chart,
       imageBase64: null,
     }))
-  const fixedSlideCount = 1 + moduleChartImages.length + 2 + 1
+  const hasQuarterWorkforce = !!(presentationCharts?.moduleWorkforceQuarter)
+  const fixedSlideCount = 1 + moduleChartImages.length + (hasQuarterWorkforce ? 3 : 2) + 1
   const overflowSlideCount = pagination.slides.filter(slideNeedsOverflow).length
   const totalSlides = fixedSlideCount + pagination.totalProjectSlides + overflowSlideCount
   const qConfig = QUARTER_CONFIG[input.analysis.quarter]
@@ -1123,10 +1114,20 @@ export async function buildFullPresentation(
   addModuleWorkforcePlaceholderSlide(
     pptx, input.analysis,
     presentationCharts?.moduleWorkforce ?? null,
-    presentationCharts?.moduleWorkforceQuarter ?? null,
+    '累計',
     pageNum, totalSlides - 1, quarterLabel, period
   )
   pageNum++
+
+  if (hasQuarterWorkforce) {
+    addModuleWorkforcePlaceholderSlide(
+      pptx, input.analysis,
+      presentationCharts!.moduleWorkforceQuarter,
+      '當季',
+      pageNum, totalSlides - 1, quarterLabel, period
+    )
+    pageNum++
+  }
 
   addMonthlyWorkTypeSlide(
     pptx, input.analysis, presentationCharts?.monthlyWorkType ?? null,
