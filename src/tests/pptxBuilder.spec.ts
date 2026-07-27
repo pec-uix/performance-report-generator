@@ -129,6 +129,15 @@ function makeAnalysisResult(
       inputOutputRatio: null,
       issues: [],
     },
+    presentationAnalysis: {
+      moduleWorkHoursCharts: [],
+      moduleWorkforce: [],
+      monthlyWorkTypes: [],
+      workforceConfigured: false,
+      monthlyRatioBasis: 'unconfirmed' as const,
+      monthlyPeriod: { start: '2025-12-01', end: '2026-07-31' },
+      issues: [],
+    },
     dataQuality: {
       invalidDateRows: 0,
       invalidHourRows: 0,

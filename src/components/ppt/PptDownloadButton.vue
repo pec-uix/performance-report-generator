@@ -66,42 +66,18 @@
       </v-card-text>
     </v-card>
 
-    <!-- 兩個下載按鈕 -->
     <div class="d-flex gap-3 flex-wrap">
-      <!-- 測試版（Phase 4）-->
-      <v-btn
-        color="deep-purple"
-        variant="tonal"
-        prepend-icon="mdi-file-powerpoint-outline"
-        :loading="isGenerating"
-        :disabled="isGenerating || isGeneratingFull"
-        @click="handleGenerateTest"
-      >
-        下載測試版 PPT（5 頁）
-      </v-btn>
-
-      <!-- 完整版（Phase 5）-->
       <v-btn
         v-if="canGenerateFull"
         color="teal-darken-2"
         prepend-icon="mdi-file-powerpoint"
         :loading="isGeneratingFull"
-        :disabled="isGenerating || isGeneratingFull"
+        :disabled="isGeneratingFull"
         @click="handleGenerateFull"
       >
         下載完整版 PPT
       </v-btn>
     </div>
-
-    <!-- 測試版錯誤 -->
-    <v-alert
-      v-if="generateError"
-      type="error"
-      variant="tonal"
-      class="mt-3"
-      :text="generateError"
-      density="compact"
-    />
 
     <!-- 完整版進度 -->
     <v-card v-if="isGeneratingFull" class="mt-4" variant="outlined">
@@ -193,7 +169,6 @@
     buildWorkforceFromHoursChart,
     renderWorkTypePieChart,
   } from '@/services/chartRenderer'
-  import { preparePptSlideData, assemblePptBlob } from '@/services/pptxBuilder'
   import { triggerPptDownload, revokeAfterTick } from '@/services/downloadService'
   import { buildImageRepository } from '@/services/imagePresentationService'
   import { buildFullPresentation } from '@/services/fullPptxBuilder'
@@ -203,7 +178,6 @@
     hourlyRateInputError,
     resolveHourlyRateSettings,
   } from '@/services/hourlyRateSettings'
-  import { PPT_MIME_TYPE } from '@/services/pptxBuilder'
 
   const props = defineProps<{
     result: ReportAnalysisResult
@@ -213,17 +187,8 @@
   }>()
 
   const emit = defineEmits<{
-    blobUrlCreated: [url: string]
-    blobReady: [url: string, blob: Blob]
     fullBlobReady: [url: string, blob: Blob, stats: FullPresentationResult]
   }>()
-
-  // ── 測試版狀態 ────────────────────────────────────────────────────────────
-
-  const isGenerating = ref(false)
-  const generateError = ref('')
-
-  // ── 完整版狀態 ────────────────────────────────────────────────────────────
 
   const isGeneratingFull = ref(false)
   const generateFullError = ref('')
@@ -272,33 +237,6 @@
     return 'grey'
   }
 
-  // ── 測試版產生 ────────────────────────────────────────────────────────────
-
-  async function handleGenerateTest(): Promise<void> {
-    if (isGenerating.value) return
-    isGenerating.value = true
-    generateError.value = ''
-
-    try {
-      const cumulativeChart = renderWorkTypePieChart(props.result.cumulative.workHours)
-      const quarterChart = renderWorkTypePieChart(props.result.quarterSummary.workHours)
-      const slideData = preparePptSlideData(props.result, cumulativeChart, quarterChart)
-      const blob = await assemblePptBlob(slideData)
-      const qConfig = QUARTER_CONFIG[props.result.quarter]
-      const filename = `績效報告_${qConfig.label}_測試版.pptx`
-      const url = triggerPptDownload(blob, filename)
-      emit('blobReady', url, blob)
-      emit('blobUrlCreated', url)
-      revokeAfterTick(url)
-    } catch (err) {
-      generateError.value = err instanceof Error ? err.message : 'PPT 產生發生未知錯誤。'
-    } finally {
-      isGenerating.value = false
-    }
-  }
-
-  // ── 完整版產生 ────────────────────────────────────────────────────────────
-
   async function handleGenerateFull(): Promise<void> {
     if (isGeneratingFull.value) return
     isGeneratingFull.value = true
@@ -313,12 +251,11 @@
       const workHoursCharts = props.result.presentationAnalysis.presentationWorkHoursCharts
         ?? props.result.presentationAnalysis.moduleWorkHoursCharts
       const presentationWHCharts = workHoursCharts
-      const cumulativePeopleCount = props.result.frontendPeopleCount
-      const quarterPeopleCount = props.result.frontendPeopleCount
-      const cumulativeWHWorkforceItems = buildWorkforceFromHoursChart(presentationWHCharts[0]!, cumulativePeopleCount)
+      const peopleCont = props.result.frontendPeopleCount
+      const cumulativeWHWorkforceItems = buildWorkforceFromHoursChart(presentationWHCharts[0]!, peopleCont)
       const quarterWHChart = presentationWHCharts.length > 1 ? presentationWHCharts[1]! : null
       const quarterWHWorkforceItems = quarterWHChart
-        ? buildWorkforceFromHoursChart(quarterWHChart, quarterPeopleCount)
+        ? buildWorkforceFromHoursChart(quarterWHChart, peopleCont)
         : null
       const presentationCharts = {
         moduleWorkHours: workHoursCharts.map((chart) => ({
@@ -335,7 +272,6 @@
             : renderMonthlyWorkTypeChart(props.result.presentationAnalysis.monthlyWorkTypes),
       }
 
-      // 建立圖片資料庫（從 ZIP 提取已驗證圖片）
       currentProgressStep.value = 'processing-images'
       const images = props.zipFile && props.validImages
         ? await buildImageRepository(props.zipFile, props.validImages)
@@ -343,7 +279,6 @@
 
       completedSteps.value = new Set(['processing-images'])
 
-      // 準備 PresentationInput
       const emptyProjectContent: ProjectContentResult = {
         sheetFound: false,
         alternativeSheetFound: false,
@@ -391,9 +326,4 @@
       isGeneratingFull.value = false
     }
   }
-
-  // 防止意外重複呼叫：僅在此元件內部使用，不對外暴露
-  // PPT_MIME_TYPE 由父層使用（verify content type if needed）
-  void PPT_MIME_TYPE
 </script>
-

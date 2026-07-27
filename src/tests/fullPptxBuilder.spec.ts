@@ -59,7 +59,7 @@ vi.mock('jszip', () => ({
 
 // ── 測試資料 ──────────────────────────────────────────────────────────────
 
-import { buildTestPresentation, buildFullPresentation } from '@/services/fullPptxBuilder'
+import { buildFullPresentation } from '@/services/fullPptxBuilder'
 
 function makePresentationAnalysis(): PresentationAnalysisResult {
   return {
@@ -212,23 +212,6 @@ beforeEach(() => {
 // ── 測試 ───────────────────────────────────────────────────────────────────
 
 describe('fullPptxBuilder', () => {
-  describe('buildTestPresentation', () => {
-    it('回傳 Blob', async () => {
-      const result = await buildTestPresentation(makeMinimalAnalysis(), null, null)
-      expect(result).toBeInstanceOf(Blob)
-    })
-
-    it('Blob MIME type 正確', async () => {
-      const result = await buildTestPresentation(makeMinimalAnalysis(), null, null)
-      expect(result.type).toBe(PPT_MIME_TYPE)
-    })
-
-    it('PptxGenJS.write 被呼叫', async () => {
-      await buildTestPresentation(makeMinimalAnalysis(), null, null)
-      expect(getMockInstance5().write).toHaveBeenCalled()
-    })
-  })
-
   describe('buildFullPresentation', () => {
     it('回傳 FullPresentationResult', async () => {
       const result = await buildFullPresentation(

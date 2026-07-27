@@ -3,7 +3,6 @@
  * Phase 5 完整版 PPT 產生服務。
  *
  * 職責：
- * - buildTestPresentation  : 包裝 Phase 4 的 5 頁測試版（不改動 Phase 4）
  * - buildFullPresentation  : 產生包含所有主專案成果頁的完整簡報
  *
  * 規則：
@@ -42,7 +41,7 @@ import {
   addSlideHeader,
   addWarningBlock,
 } from './pptComponents'
-import { PPT_MIME_TYPE, assemblePptBlob, preparePptSlideData } from './pptxBuilder'
+import { PPT_MIME_TYPE } from './pptxBuilder'
 import {
   buildExecutiveProjectSlides,
   type ExecutiveImagePlacement,
@@ -1019,19 +1018,6 @@ function addClosingSlide(
 }
 
 // ── 公開 API ──────────────────────────────────────────────────────────────
-
-/**
- * 產生測試版 PPT（5 頁，Phase 4 相容版）。
- * 包裝 Phase 4 的 assemblePptBlob，不修改既有邏輯。
- */
-export async function buildTestPresentation(
-  result: ReportAnalysisResult,
-  cumulativeChartBase64: string | null,
-  quarterChartBase64: string | null
-): Promise<Blob> {
-  const slideData = preparePptSlideData(result, cumulativeChartBase64, quarterChartBase64)
-  return assemblePptBlob(slideData)
-}
 
 /**
  * 產生完整版 PPT（主管版完整輸出）。
