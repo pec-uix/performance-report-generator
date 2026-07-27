@@ -554,6 +554,53 @@ export function renderModuleWorkforceChart(items: ModuleWorkforceResult[]): stri
   return renderChartOption(option)
 }
 
+export function buildWorkforceFromHoursChart(
+  chart: ModuleWorkHoursChartResult,
+  effectivePeopleCount: number
+): ModuleWorkforceResult[] {
+  if (chart.totalHours <= 0 || effectivePeopleCount <= 0) return []
+  return chart.items
+    .filter((item) => item.hours > 0)
+    .map((item) => ({
+      moduleKey: item.moduleKey,
+      displayName: item.displayName,
+      workforce: Math.round((item.hours / chart.totalHours) * effectivePeopleCount * 10000) / 10000,
+      calculationStatus: 'confirmed' as const,
+    }))
+    .sort((a, b) => (b.workforce ?? 0) - (a.workforce ?? 0))
+}
+
+function buildModuleWorkforcePieChartResult(
+  items: ModuleWorkforceResult[]
+): ModuleWorkHoursChartResult | null {
+  const configured = items.filter((item) => item.workforce !== null && (item.workforce ?? 0) > 0)
+  if (configured.length === 0) return null
+  const total = configured.reduce((sum, item) => sum + (item.workforce ?? 0), 0)
+  if (total <= 0) return null
+  const sorted = [...configured].sort((a, b) => (b.workforce ?? 0) - (a.workforce ?? 0))
+  return {
+    periodType: 'cumulative',
+    startDate: '',
+    endDate: '',
+    totalHours: total,
+    items: sorted.map((item) => ({
+      moduleKey: item.moduleKey,
+      displayName: item.displayName,
+      hours: item.workforce ?? 0,
+      ratio: (item.workforce ?? 0) / total,
+      category: 'project' as const,
+    })),
+  }
+}
+
+export function renderModuleWorkforcePieChart(items: ModuleWorkforceResult[]): string | null {
+  const chartResult = buildModuleWorkforcePieChartResult(items)
+  if (!chartResult) return null
+  const option = buildModuleWorkHoursOption(chartResult)
+  if (!option) return null
+  return renderChartOption(option, MODULE_WORK_HOURS_CHART_W, MODULE_WORK_HOURS_CHART_H)
+}
+
 export function buildMonthlyWorkTypeOption(
   items: MonthlyWorkTypeResult[]
 ): Record<string, unknown> | null {

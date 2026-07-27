@@ -190,6 +190,8 @@
     renderMonthlyProjectMaintenanceChart,
     renderModuleWorkHoursChart,
     renderModuleWorkforceChart,
+    renderModuleWorkforcePieChart,
+    buildWorkforceFromHoursChart,
     renderWorkTypePieChart,
   } from '@/services/chartRenderer'
   import { preparePptSlideData, assemblePptBlob } from '@/services/pptxBuilder'
@@ -314,13 +316,26 @@
         ?? props.result.presentationAnalysis.moduleWorkHoursCharts
       const quarterWorkforceItems = scopeAnalysis?.moduleWorkforceQuarter
         ?? props.result.presentationAnalysis.moduleWorkforceQuarter
+      const workforceItems = scopeAnalysis?.moduleWorkforce ?? props.result.presentationAnalysis.moduleWorkforce
+      const presentationWHCharts = props.result.presentationAnalysis.presentationWorkHoursCharts
+        ?? props.result.presentationAnalysis.moduleWorkHoursCharts
+      const cumulativePeopleCount = props.result.cumulative.workforce.activePeopleCount
+      const quarterPeopleCount = props.result.quarterSummary.workforce.activePeopleCount
+      const pieWorkforceItems = buildWorkforceFromHoursChart(presentationWHCharts[0]!, cumulativePeopleCount)
+      const quarterWHChart = presentationWHCharts.length > 1 ? presentationWHCharts[1]! : null
+      const quarterWHWorkforceItems = quarterWHChart
+        ? buildWorkforceFromHoursChart(quarterWHChart, quarterPeopleCount)
+        : null
       const presentationCharts = {
         moduleWorkHours: workHoursCharts.map((chart) => ({
           chart,
           imageBase64: renderModuleWorkHoursChart(chart),
         })),
-        moduleWorkforce: renderModuleWorkforceChart(scopeAnalysis?.moduleWorkforce ?? props.result.presentationAnalysis.moduleWorkforce),
-        moduleWorkforceQuarter: quarterWorkforceItems ? renderModuleWorkforceChart(quarterWorkforceItems) : null,
+        moduleWorkforce: renderModuleWorkforceChart(workforceItems),
+        moduleWorkforcePie: renderModuleWorkforcePieChart(pieWorkforceItems),
+        moduleWorkforceQuarter: quarterWHWorkforceItems
+          ? renderModuleWorkforceChart(quarterWHWorkforceItems)
+          : null,
         monthlyWorkType:
           props.result.presentationAnalysis.monthlyRatioBasis === 'project-and-maintenance-only'
             ? renderMonthlyProjectMaintenanceChart(props.result.presentationAnalysis.monthlyWorkTypes)
