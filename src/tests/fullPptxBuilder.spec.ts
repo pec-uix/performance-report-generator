@@ -119,6 +119,7 @@ function makeMinimalAnalysis(projectCount = 1): ReportAnalysisResult {
     quarterProjectRanking: [...groups].reverse(),
     revenue: { configured: false, cumulativeRevenue: null, quarterRevenue: null, revenuePerHour: null, inputOutputRatio: null, issues: [] },
     presentationAnalysis: makePresentationAnalysis(),
+    frontendPeopleCount: 5,
     dataQuality: { invalidDateRows: 0, invalidHourRows: 0, unmatchedPeopleRows: 0, unmatchedProjectRows: 0, unmatchedMaintenanceRows: 0, unclassifiedRows: 0, unclassifiedHours: 0, projectMappingAvailable: false, projectMappingBlocked: false, unmappedProjectHours: 0, unmappedProjectRecords: 0 },
     issues: [],
     metadata: { calculatedAt: '2026-07-23T10:00:00.000Z', sourceRowCounts: {} },

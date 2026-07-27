@@ -313,8 +313,8 @@
       const workHoursCharts = props.result.presentationAnalysis.presentationWorkHoursCharts
         ?? props.result.presentationAnalysis.moduleWorkHoursCharts
       const presentationWHCharts = workHoursCharts
-      const cumulativePeopleCount = props.result.cumulative.workforce.activePeopleCount
-      const quarterPeopleCount = props.result.quarterSummary.workforce.activePeopleCount
+      const cumulativePeopleCount = props.result.frontendPeopleCount
+      const quarterPeopleCount = props.result.frontendPeopleCount
       const cumulativeWHWorkforceItems = buildWorkforceFromHoursChart(presentationWHCharts[0]!, cumulativePeopleCount)
       const quarterWHChart = presentationWHCharts.length > 1 ? presentationWHCharts[1]! : null
       const quarterWHWorkforceItems = quarterWHChart

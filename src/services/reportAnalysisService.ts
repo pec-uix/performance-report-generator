@@ -404,6 +404,7 @@ export function runAnalysis(
     presentationScope: hasPresentationScope ? presentationScope : undefined,
     projectCostHoursByItemNo,
     projectCostCumulativeHoursByItemNo,
+    frontendPeopleCount: countFrontendPeople(personResult.records),
     dataQuality: {
       invalidDateRows,
       invalidHourRows,

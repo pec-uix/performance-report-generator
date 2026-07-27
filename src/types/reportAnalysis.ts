@@ -56,6 +56,9 @@ export interface ReportAnalysisResult {
   /** Phase 6H 成本計算用：白名單主項三組織累積期間工時 */
   projectCostCumulativeHoursByItemNo?: Record<string, ProjectOrganizationHours>
 
+  /** 前端開發課在職人員數（來自人員清單，用於長條圖人力計算分母） */
+  frontendPeopleCount: number
+
   dataQuality: {
     invalidDateRows: number
     invalidHourRows: number

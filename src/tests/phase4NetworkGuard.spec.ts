@@ -138,6 +138,7 @@ function makeMinimalResult(): ReportAnalysisResult {
       unmappedProjectHours: 0,
       unmappedProjectRecords: 0,
     },
+    frontendPeopleCount: 5,
     issues: [],
     metadata: {
       calculatedAt: '2026-07-22T10:30:00.000Z',
