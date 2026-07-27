@@ -621,7 +621,7 @@ export function buildMonthlyProjectMaintenanceOption(
       data: ['佔比-專案', '佔比-維運', '人力-專案', '人力-維運'],
       textStyle: { fontSize: 11 },
     },
-    grid: { left: 148, right: 54, top: 22, bottom: 56 },
+    grid: { left: 92, right: 54, top: 22, bottom: 56 },
     xAxis: { type: 'value', min: 0, axisLabel: { fontSize: 11 } },
     yAxis: {
       type: 'category',
@@ -637,16 +637,9 @@ export function buildMonthlyProjectMaintenanceOption(
         itemStyle: { color: '#9AD45A' },
         label: {
           show: true,
-          position: 'left',
-          formatter: (params: { dataIndex?: number }) => {
-            const item = configured[params.dataIndex ?? 0]
-            const proj = ((item?.projectRatio ?? 0) * 100).toFixed(1)
-            const maint = ((item?.maintenanceRatio ?? 0) * 100).toFixed(1)
-            return `專${proj}%\n維${maint}%`
-          },
+          formatter: (params: { value?: number }) => `${((params.value ?? 0) * 100).toFixed(2)}%`,
           fontSize: 10,
           color: '#1F2937',
-          lineHeight: 14,
         },
       },
       {
@@ -655,7 +648,12 @@ export function buildMonthlyProjectMaintenanceOption(
         stack: 'project-maintenance',
         data: configured.map((item) => item.maintenanceRatio),
         itemStyle: { color: '#4E73BE' },
-        label: { show: false },
+        label: {
+          show: true,
+          formatter: (params: { value?: number }) => `${((params.value ?? 0) * 100).toFixed(2)}%`,
+          fontSize: 10,
+          color: '#1F2937',
+        },
       },
       {
         name: '人力-專案',
