@@ -190,7 +190,6 @@
     renderMonthlyProjectMaintenanceChart,
     renderModuleWorkHoursChart,
     renderModuleWorkforceChart,
-    renderModuleWorkforcePieChart,
     buildWorkforceFromHoursChart,
     renderWorkTypePieChart,
   } from '@/services/chartRenderer'
@@ -311,15 +310,12 @@
     try {
       const cumulativeChart = renderWorkTypePieChart(props.result.cumulative.workHours)
       const quarterChart = renderWorkTypePieChart(props.result.quarterSummary.workHours)
-      const scopeAnalysis = props.result.presentationAnalysis.presentationScopeAnalysis
       const workHoursCharts = props.result.presentationAnalysis.presentationWorkHoursCharts
         ?? props.result.presentationAnalysis.moduleWorkHoursCharts
-      const workforceItems = scopeAnalysis?.moduleWorkforce ?? props.result.presentationAnalysis.moduleWorkforce
-      const presentationWHCharts = props.result.presentationAnalysis.presentationWorkHoursCharts
-        ?? props.result.presentationAnalysis.moduleWorkHoursCharts
+      const presentationWHCharts = workHoursCharts
       const cumulativePeopleCount = props.result.cumulative.workforce.activePeopleCount
       const quarterPeopleCount = props.result.quarterSummary.workforce.activePeopleCount
-      const pieWorkforceItems = buildWorkforceFromHoursChart(presentationWHCharts[0]!, cumulativePeopleCount)
+      const cumulativeWHWorkforceItems = buildWorkforceFromHoursChart(presentationWHCharts[0]!, cumulativePeopleCount)
       const quarterWHChart = presentationWHCharts.length > 1 ? presentationWHCharts[1]! : null
       const quarterWHWorkforceItems = quarterWHChart
         ? buildWorkforceFromHoursChart(quarterWHChart, quarterPeopleCount)
@@ -329,8 +325,7 @@
           chart,
           imageBase64: renderModuleWorkHoursChart(chart),
         })),
-        moduleWorkforce: renderModuleWorkforceChart(workforceItems),
-        moduleWorkforcePie: renderModuleWorkforcePieChart(pieWorkforceItems),
+        moduleWorkforce: renderModuleWorkforceChart(cumulativeWHWorkforceItems),
         moduleWorkforceQuarter: quarterWHWorkforceItems
           ? renderModuleWorkforceChart(quarterWHWorkforceItems)
           : null,

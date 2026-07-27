@@ -467,7 +467,6 @@ describe('fullPptxBuilder', () => {
               imageBase64: 'data:image/png;base64,CHART',
             })),
             moduleWorkforce: 'data:image/png;base64,WORKFORCE',
-            moduleWorkforcePie: 'data:image/png;base64,WORKFORCEPIE',
             moduleWorkforceQuarter: null,
             monthlyWorkType: 'data:image/png;base64,MONTHLY',
           },
@@ -484,11 +483,11 @@ describe('fullPptxBuilder', () => {
         slide.text.length + slide.addImage.mock.calls.length + slide.addTable.mock.calls.length > 0
       )).toBe(true)
 
-      const monthlySlide = slides[5]
+      const monthlySlide = slides[4]
       expect(monthlySlide?.text.join(' ')).toContain('工作成果說明－專案／維運占比')
       expect(monthlySlide?.addImage).toHaveBeenCalledTimes(1)
       expect(monthlySlide?.addTable).not.toHaveBeenCalled()
-      expect(slides[6]?.text.join(' ')).toContain('PROJECT CODE')
+      expect(slides[5]?.text.join(' ')).toContain('PROJECT CODE')
 
       const pageNumbers = allText.match(/SLIDE \d+ \/ \d+/g) ?? []
       expect(pageNumbers).toHaveLength(result.totalSlides - 1)

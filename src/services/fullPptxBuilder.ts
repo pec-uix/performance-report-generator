@@ -394,36 +394,6 @@ function addModuleWorkforcePlaceholderSlide(
   addFooter(slide, quarterLabel, period, pn, total)
 }
 
-function addModuleWorkforcePieSlide(
-  pptx: PptxGenJS,
-  chartBase64: string | null,
-  periodLabel: '累計' | '當季',
-  pn: number,
-  total: number,
-  quarterLabel: string,
-  period: string
-): void {
-  const slide = pptx.addSlide()
-  const L = PRES_LAYOUT
-
-  addSlideHeader(slide, {
-    title: '工作成果說明－白名單專案人力',
-    subtitle: '前端開發課白名單專案人力分布',
-  })
-
-  if (chartBase64) {
-    slide.addText(periodLabel, {
-      x: L.padX, y: 1.02, w: L.contentW, h: 0.22,
-      fontSize: PRES_FONT_SIZE.caption, fontFace: PRES_FONT, bold: true, color: PRES_COLOR.subtitleText,
-    })
-    slide.addImage({ data: chartBase64, x: L.padX, y: 1.26, w: L.contentW, h: 3.82 })
-  } else {
-    addWarningBlock(slide, { x: L.padX, y: 1.05, w: L.contentW, h: 0.75 }, '無白名單專案人力圓餅圖資料。')
-  }
-
-  addFooter(slide, quarterLabel, period, pn, total)
-}
-
 function addMonthlyWorkTypeSlide(
   pptx: PptxGenJS,
   analysis: ReportAnalysisResult,
@@ -1116,7 +1086,7 @@ export async function buildFullPresentation(
       imageBase64: null,
     }))
   const hasQuarterWorkforce = !!(presentationCharts?.moduleWorkforceQuarter)
-  const fixedSlideCount = 1 + moduleChartImages.length + (hasQuarterWorkforce ? 4 : 3) + 1
+  const fixedSlideCount = 1 + moduleChartImages.length + (hasQuarterWorkforce ? 3 : 2) + 1
   const overflowSlideCount = pagination.slides.filter(slideNeedsOverflow).length
   const totalSlides = fixedSlideCount + pagination.totalProjectSlides + overflowSlideCount
   const qConfig = QUARTER_CONFIG[input.analysis.quarter]
@@ -1144,14 +1114,6 @@ export async function buildFullPresentation(
   addModuleWorkforcePlaceholderSlide(
     pptx, input.analysis,
     presentationCharts?.moduleWorkforce ?? null,
-    '累計',
-    pageNum, totalSlides - 1, quarterLabel, period
-  )
-  pageNum++
-
-  addModuleWorkforcePieSlide(
-    pptx,
-    presentationCharts?.moduleWorkforcePie ?? null,
     '累計',
     pageNum, totalSlides - 1, quarterLabel, period
   )
