@@ -314,8 +314,6 @@
       const scopeAnalysis = props.result.presentationAnalysis.presentationScopeAnalysis
       const workHoursCharts = props.result.presentationAnalysis.presentationWorkHoursCharts
         ?? props.result.presentationAnalysis.moduleWorkHoursCharts
-      const quarterWorkforceItems = scopeAnalysis?.moduleWorkforceQuarter
-        ?? props.result.presentationAnalysis.moduleWorkforceQuarter
       const workforceItems = scopeAnalysis?.moduleWorkforce ?? props.result.presentationAnalysis.moduleWorkforce
       const presentationWHCharts = props.result.presentationAnalysis.presentationWorkHoursCharts
         ?? props.result.presentationAnalysis.moduleWorkHoursCharts
