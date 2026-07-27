@@ -312,12 +312,15 @@
       const scopeAnalysis = props.result.presentationAnalysis.presentationScopeAnalysis
       const workHoursCharts = props.result.presentationAnalysis.presentationWorkHoursCharts
         ?? props.result.presentationAnalysis.moduleWorkHoursCharts
+      const quarterWorkforceItems = scopeAnalysis?.moduleWorkforceQuarter
+        ?? props.result.presentationAnalysis.moduleWorkforceQuarter
       const presentationCharts = {
         moduleWorkHours: workHoursCharts.map((chart) => ({
           chart,
           imageBase64: renderModuleWorkHoursChart(chart),
         })),
         moduleWorkforce: renderModuleWorkforceChart(scopeAnalysis?.moduleWorkforce ?? props.result.presentationAnalysis.moduleWorkforce),
+        moduleWorkforceQuarter: quarterWorkforceItems ? renderModuleWorkforceChart(quarterWorkforceItems) : null,
         monthlyWorkType:
           props.result.presentationAnalysis.monthlyRatioBasis === 'project-and-maintenance-only'
             ? renderMonthlyProjectMaintenanceChart(props.result.presentationAnalysis.monthlyWorkTypes)

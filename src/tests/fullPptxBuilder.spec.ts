@@ -467,6 +467,7 @@ describe('fullPptxBuilder', () => {
               imageBase64: 'data:image/png;base64,CHART',
             })),
             moduleWorkforce: 'data:image/png;base64,WORKFORCE',
+            moduleWorkforceQuarter: null,
             monthlyWorkType: 'data:image/png;base64,MONTHLY',
           },
         },

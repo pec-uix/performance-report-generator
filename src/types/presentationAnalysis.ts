@@ -72,6 +72,7 @@ export interface PresentationAnalysisResult {
   /** 完整版 PPT 第一、第二張工時圖口徑：白名單專案 + 指定共用工時。 */
   presentationWorkHoursCharts?: ModuleWorkHoursChartResult[]
   moduleWorkforce: ModuleWorkforceResult[]
+  moduleWorkforceQuarter?: ModuleWorkforceResult[]
   monthlyWorkTypes: MonthlyWorkTypeResult[]
   workforceConfigured: boolean
   monthlyRatioBasis: WorkTypeRatioBasis
@@ -82,6 +83,7 @@ export interface PresentationAnalysisResult {
   presentationScopeAnalysis?: {
     moduleWorkHoursCharts: ModuleWorkHoursChartResult[]
     moduleWorkforce: ModuleWorkforceResult[]
+    moduleWorkforceQuarter?: ModuleWorkforceResult[]
     cumulativeTotalHours: number
     quarterTotalHours: number
   }

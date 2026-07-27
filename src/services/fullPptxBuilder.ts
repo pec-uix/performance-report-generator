@@ -346,6 +346,7 @@ function addModuleWorkforcePlaceholderSlide(
   pptx: PptxGenJS,
   analysis: ReportAnalysisResult,
   chartBase64: string | null,
+  quarterChartBase64: string | null,
   pn: number,
   total: number,
   quarterLabel: string,
@@ -358,7 +359,22 @@ function addModuleWorkforcePlaceholderSlide(
     title: '工作成果說明－白名單專案人力',
     subtitle: '前端開發課白名單專案人力投入',
   })
-  if (chartBase64) {
+
+  const hasBothCharts = chartBase64 && quarterChartBase64
+  if (hasBothCharts) {
+    // 累計標籤
+    slide.addText('累計', {
+      x: L.padX, y: 1.02, w: L.contentW, h: 0.22,
+      fontSize: PRES_FONT_SIZE.caption, fontFace: PRES_FONT, bold: true, color: PRES_COLOR.subtitleText,
+    })
+    slide.addImage({ data: chartBase64, x: L.padX, y: 1.26, w: L.contentW, h: 1.82 })
+    // 當季標籤
+    slide.addText('當季', {
+      x: L.padX, y: 3.13, w: L.contentW, h: 0.22,
+      fontSize: PRES_FONT_SIZE.caption, fontFace: PRES_FONT, bold: true, color: PRES_COLOR.subtitleText,
+    })
+    slide.addImage({ data: quarterChartBase64, x: L.padX, y: 3.37, w: L.contentW, h: 1.82 })
+  } else if (chartBase64) {
     slide.addImage({ data: chartBase64, x: L.padX, y: 1.05, w: L.contentW, h: 4.05 })
   } else if (analysis.presentationAnalysis.workforceConfigured) {
     const modules = analysis.presentationAnalysis.presentationScopeAnalysis?.moduleWorkforce ??
@@ -408,7 +424,11 @@ function addMonthlyWorkTypeSlide(
   })
 
   if (chartBase64) {
-    slide.addImage({ data: chartBase64, x: L.padX, y: 1.02, w: L.contentW, h: 4.02 })
+    slide.addText('累計', {
+      x: L.padX, y: 1.02, w: L.contentW, h: 0.22,
+      fontSize: PRES_FONT_SIZE.caption, fontFace: PRES_FONT, bold: true, color: PRES_COLOR.subtitleText,
+    })
+    slide.addImage({ data: chartBase64, x: L.padX, y: 1.26, w: L.contentW, h: 3.78 })
   } else {
     addWarningBlock(slide, { x: L.padX, y: 2.25, w: L.contentW, h: 0.6 }, '此期間無專案／維運占比圖資料。')
   }
@@ -1101,7 +1121,9 @@ export async function buildFullPresentation(
   }
 
   addModuleWorkforcePlaceholderSlide(
-    pptx, input.analysis, presentationCharts?.moduleWorkforce ?? null,
+    pptx, input.analysis,
+    presentationCharts?.moduleWorkforce ?? null,
+    presentationCharts?.moduleWorkforceQuarter ?? null,
     pageNum, totalSlides - 1, quarterLabel, period
   )
   pageNum++

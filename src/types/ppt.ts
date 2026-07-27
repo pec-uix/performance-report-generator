@@ -107,6 +107,7 @@ export interface PresentationChartImage {
 export interface PresentationChartImages {
   moduleWorkHours: PresentationChartImage[]
   moduleWorkforce: string | null
+  moduleWorkforceQuarter: string | null
   monthlyWorkType: string | null
 }
 

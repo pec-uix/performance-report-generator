@@ -478,6 +478,7 @@ export function buildPresentationAnalysis(
     moduleWorkHoursCharts,
     presentationWorkHoursCharts,
     moduleWorkforce: buildModuleWorkforce(cumulativeChart, effectivePeopleCount),
+    moduleWorkforceQuarter: samePeriod ? undefined : buildModuleWorkforce(quarterChart, effectivePeopleCount),
     monthlyWorkTypes,
     workforceConfigured: true,
     monthlyRatioBasis: 'project-and-maintenance-only',
@@ -493,6 +494,9 @@ export function buildPresentationAnalysis(
       ? {
           moduleWorkHoursCharts: scopeCharts,
           moduleWorkforce: buildModuleWorkforce(scopeCharts[0] as ModuleWorkHoursChartResult, effectivePeopleCount),
+          moduleWorkforceQuarter: scopeCharts.length > 1
+            ? buildModuleWorkforce(scopeCharts[1] as ModuleWorkHoursChartResult, effectivePeopleCount)
+            : undefined,
           cumulativeTotalHours: scopeCumulativeChart?.totalHours ?? 0,
           quarterTotalHours: scopeQuarterChart?.totalHours ?? scopeCumulativeChart?.totalHours ?? 0,
         }
