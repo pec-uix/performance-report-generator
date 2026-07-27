@@ -197,7 +197,7 @@ describe('Phase 6A-2 chartRenderer', () => {
     expect(option.series[0].type).toBe('bar')
     expect(option.series[0].data).toEqual([1.6712, 1.083])
     expect(option.yAxis.data[0]).toBe('團購網&UNI團購網系統優化')
-    expect(option.series[0].label.formatter({ name: 'UNI', value: 1.6712 })).toBe('UNI, 1.67')
+    expect(option.series[0].label.formatter({ name: 'UNI', value: 1.6712 })).toBe('1.67')
     expect(option.series[0].label.backgroundColor).toBeUndefined()
   })
 
